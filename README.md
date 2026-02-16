@@ -34,11 +34,20 @@ sudo mv stefanclaw /usr/local/bin/
 
 ### Prerequisites
 
-[Ollama](https://ollama.ai) must be running locally:
+[Ollama](https://ollama.ai) must be running locally (or on a reachable host):
 
 ```bash
 ollama serve
 ```
+
+To use a remote Ollama instance:
+```bash
+stefanclaw --ollama-url http://192.168.1.100:11434
+# or
+OLLAMA_HOST=http://192.168.1.100:11434 stefanclaw
+```
+
+Priority: `--ollama-url` flag > `OLLAMA_HOST` env var > `config.yaml` > default (`http://127.0.0.1:11434`).
 
 On first run, an onboarding wizard configures your setup (name, language, model).
 

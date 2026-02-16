@@ -21,6 +21,24 @@ import (
 var version = "dev"
 
 func main() {
+	// Parse --ollama-url flag from args
+	var ollamaURL string
+	filteredArgs := []string{os.Args[0]}
+	for i := 1; i < len(os.Args); i++ {
+		if os.Args[i] == "--ollama-url" && i+1 < len(os.Args) {
+			ollamaURL = os.Args[i+1]
+			i++ // skip the value
+		} else {
+			filteredArgs = append(filteredArgs, os.Args[i])
+		}
+	}
+	os.Args = filteredArgs
+
+	// Fall back to OLLAMA_HOST env var
+	if ollamaURL == "" {
+		ollamaURL = os.Getenv("OLLAMA_HOST")
+	}
+
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "--version", "-v":
@@ -38,16 +56,19 @@ func main() {
 		}
 	}
 
-	if err := run(); err != nil {
+	if err := run(ollamaURL); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run() error {
+func run(ollamaURL string) error {
 	// First run: onboarding
 	if config.IsFirstRun() {
 		runner := onboard.NewRunner()
+		if ollamaURL != "" {
+			runner.BaseURL = ollamaURL
+		}
 		result, err := runner.Run()
 		if err != nil {
 			return err
@@ -59,6 +80,11 @@ func run() error {
 	cfg, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
+	}
+
+	// CLI flag / env var override config file
+	if ollamaURL != "" {
+		cfg.Provider.Ollama.BaseURL = ollamaURL
 	}
 
 	// Create Ollama provider
@@ -173,11 +199,12 @@ func printHelp() {
 	fmt.Printf(`stefanclaw %s — your personal AI assistant
 
 Usage:
-  stefanclaw              Start the TUI chat interface
-  stefanclaw --version    Print version and exit
-  stefanclaw --help       Show this help
-  stefanclaw --update     Update to the latest version
-  stefanclaw --uninstall  Remove all stefanclaw data from your system
+  stefanclaw                          Start the TUI chat interface
+  stefanclaw --ollama-url <url>       Use a custom Ollama endpoint
+  stefanclaw --version                Print version and exit
+  stefanclaw --help                   Show this help
+  stefanclaw --update                 Update to the latest version
+  stefanclaw --uninstall              Remove all stefanclaw data from your system
 
 Slash commands (in TUI):
   /help                Show available commands
@@ -199,11 +226,17 @@ Configuration:
   Config is stored in %s
   Override with STEFANCLAW_CONFIG_DIR environment variable.
 
+Ollama endpoint (priority: flag > env > config > default):
+  --ollama-url <url>   Override the Ollama base URL
+  OLLAMA_HOST          Environment variable (matches Ollama's own convention)
+
 Requires:
-  Ollama running locally (https://ollama.ai)
+  Ollama running locally or at the specified endpoint (https://ollama.ai)
 
 Examples:
-  stefanclaw                          Start chatting
-  STEFANCLAW_CONFIG_DIR=/tmp/test stefanclaw  Use custom config dir
+  stefanclaw                                                Start chatting
+  stefanclaw --ollama-url http://192.168.1.100:11434        Use remote Ollama
+  OLLAMA_HOST=http://192.168.1.100:11434 stefanclaw         Same via env var
+  STEFANCLAW_CONFIG_DIR=/tmp/test stefanclaw                Use custom config dir
 `, version, config.Dir())
 }
