@@ -30,7 +30,8 @@ On first run, an onboarding wizard configures your setup (name, language, model)
 - **Heartbeat check-ins** — configurable periodic proactive messages when idle
 - **Adaptive context scaling** — starts with 4K context, automatically grows to 8K/16K/32K as conversations get longer
 - **Web fetch** — fetch any web page as markdown via Jina Reader
-- Slash commands: `/help`, `/quit`, `/bye`, `/exit`, `/models`, `/model`, `/session`, `/memory`, `/remember`, `/forget`, `/clear`, `/language`, `/heartbeat`, `/fetch`, `/personality edit`
+- **Web search** — search the web via DuckDuckGo (no API key needed)
+- Slash commands: `/help`, `/quit`, `/bye`, `/exit`, `/models`, `/model`, `/session`, `/memory`, `/remember`, `/forget`, `/clear`, `/language`, `/heartbeat`, `/fetch`, `/search`, `/personality edit`
 
 ## Language Support
 
@@ -60,6 +61,12 @@ heartbeat:
 Fetch any web page and display it as markdown directly in the chat. Powered by [Jina Reader](https://r.jina.ai/) — no API key needed (free tier: 100 RPM). Content is capped at 32KB.
 
 - `/fetch https://example.com` — fetch and display a page
+
+## Web Search
+
+Search the web directly from the chat. Powered by DuckDuckGo routed through Jina Reader — no API key needed.
+
+- `/search capital of france` — search and display results
 
 ## Adaptive Context Scaling
 

@@ -78,6 +78,56 @@ func TestFetch_TruncatedAtMaxSize(t *testing.T) {
 	}
 }
 
+func TestSearch_Success(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Accept") != "text/markdown" {
+			t.Errorf("Accept header = %q, want text/markdown", r.Header.Get("Accept"))
+		}
+		w.Write([]byte("## Search Results\n1. Result one\n2. Result two"))
+	}))
+	defer srv.Close()
+
+	c := NewWithHTTPClient(srv.Client())
+	c.http.Transport = rewriteTransport{base: srv}
+
+	body, err := c.Search(context.Background(), "capital of france")
+	if err != nil {
+		t.Fatalf("Search() error: %v", err)
+	}
+	if !strings.Contains(body, "Search Results") {
+		t.Errorf("body = %q, want to contain 'Search Results'", body)
+	}
+}
+
+func TestSearch_EmptyQuery(t *testing.T) {
+	c := New()
+	_, err := c.Search(context.Background(), "")
+	if err == nil {
+		t.Error("Search() should return error for empty query")
+	}
+	if !strings.Contains(err.Error(), "required") {
+		t.Errorf("error = %q, want to mention 'required'", err.Error())
+	}
+}
+
+func TestSearch_Non200(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+	}))
+	defer srv.Close()
+
+	c := NewWithHTTPClient(srv.Client())
+	c.http.Transport = rewriteTransport{base: srv}
+
+	_, err := c.Search(context.Background(), "test query")
+	if err == nil {
+		t.Error("Search() should return error for non-200 status")
+	}
+	if !strings.Contains(err.Error(), "502") {
+		t.Errorf("error = %q, want to mention 502", err.Error())
+	}
+}
+
 func TestFetch_InvalidURL_NoScheme(t *testing.T) {
 	c := New()
 	_, err := c.Fetch(context.Background(), "example.com")

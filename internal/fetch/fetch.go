@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -59,6 +60,44 @@ func (c *Client) Fetch(ctx context.Context, rawURL string) (string, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("fetch failed: HTTP %d", resp.StatusCode)
+	}
+
+	limited := io.LimitReader(resp.Body, MaxBodySize+1)
+	body, err := io.ReadAll(limited)
+	if err != nil {
+		return "", fmt.Errorf("reading response: %w", err)
+	}
+
+	if len(body) > MaxBodySize {
+		body = body[:MaxBodySize]
+	}
+
+	return string(body), nil
+}
+
+// Search performs a web search via DuckDuckGo routed through Jina Reader.
+func (c *Client) Search(ctx context.Context, query string) (string, error) {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return "", fmt.Errorf("search query is required")
+	}
+
+	searchURL := "https://r.jina.ai/https://html.duckduckgo.com/html/?q=" + url.QueryEscape(query)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, searchURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("creating request: %w", err)
+	}
+	req.Header.Set("Accept", "text/markdown")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("searching: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("search failed: HTTP %d", resp.StatusCode)
 	}
 
 	limited := io.LimitReader(resp.Body, MaxBodySize+1)

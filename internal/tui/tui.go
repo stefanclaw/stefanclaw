@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -76,6 +77,17 @@ type FetchDoneMsg struct {
 
 // FetchErrMsg carries a web fetch error.
 type FetchErrMsg struct {
+	Err error
+}
+
+// SearchDoneMsg carries the result of a web search.
+type SearchDoneMsg struct {
+	Query   string
+	Content string
+}
+
+// SearchErrMsg carries a web search error.
+type SearchErrMsg struct {
 	Err error
 }
 
@@ -335,6 +347,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.updateViewport()
 		return m, nil
 
+	case SearchDoneMsg:
+		m.messages = append(m.messages, displayMessage{
+			role:    "system",
+			content: fmt.Sprintf("Search results for %q:\n\n%s", msg.Query, msg.Content),
+		})
+		m.updateViewport()
+		return m, nil
+
+	case SearchErrMsg:
+		m.messages = append(m.messages, displayMessage{
+			role:    "system",
+			content: fmt.Sprintf("Search error: %v", msg.Err),
+		})
+		m.updateViewport()
+		return m, nil
+
 	case ModelListMsg:
 		if msg.Err != nil {
 			m.messages = append(m.messages, displayMessage{
@@ -525,6 +553,9 @@ func (m *Model) handleCommand(cmd *Command) (tea.Model, tea.Cmd) {
 	case "fetch":
 		return m.handleFetchCommand(cmd.Args)
 
+	case "search":
+		return m.handleSearchCommand(cmd.Args)
+
 	case "personality":
 		if cmd.Args == "edit" {
 			m.messages = append(m.messages, displayMessage{
@@ -633,6 +664,9 @@ func (m *Model) buildMessages(userInput string) []provider.Message {
 	return msgs
 }
 
+// urlPattern matches http and https URLs in user messages.
+var urlPattern = regexp.MustCompile(`https?://[^\s)<>]+`)
+
 func (m *Model) startStream(ctx context.Context, userInput string) tea.Cmd {
 	// Capture what we need — the closure must not rely on m fields surviving
 	sysProm := m.options.SystemPrompt
@@ -640,9 +674,27 @@ func (m *Model) startStream(ctx context.Context, userInput string) tea.Cmd {
 	prov := m.options.Provider
 	msgs := m.buildMessages(userInput)
 	numCtx := m.currentNumCtx
+	fetchClient := m.fetchClient
 
 	return func() tea.Msg {
 		_ = sysProm // already included via buildMessages
+
+		// Auto-fetch URLs found in the user's message
+		if urls := urlPattern.FindAllString(userInput, 3); len(urls) > 0 {
+			var fetched []string
+			for _, u := range urls {
+				content, err := fetchClient.Fetch(ctx, u)
+				if err == nil && content != "" {
+					fetched = append(fetched, fmt.Sprintf("[Web content from %s]\n%s\n[End web content]", u, content))
+				}
+			}
+			if len(fetched) > 0 {
+				// Append fetched content to the last user message
+				last := &msgs[len(msgs)-1]
+				last.Content += "\n\n" + strings.Join(fetched, "\n\n")
+			}
+		}
+
 		ch, err := prov.StreamChat(ctx, provider.ChatRequest{
 			Model:    model,
 			Messages: msgs,
@@ -965,6 +1017,32 @@ func (m *Model) handleFetchCommand(rawURL string) (tea.Model, tea.Cmd) {
 			return FetchErrMsg{Err: err}
 		}
 		return FetchDoneMsg{URL: rawURL, Content: content}
+	}
+}
+
+func (m *Model) handleSearchCommand(query string) (tea.Model, tea.Cmd) {
+	if query == "" {
+		m.messages = append(m.messages, displayMessage{
+			role:    "system",
+			content: "Usage: /search <query>",
+		})
+		m.updateViewport()
+		return m, nil
+	}
+
+	m.messages = append(m.messages, displayMessage{
+		role:    "system",
+		content: fmt.Sprintf("Searching for %q...", query),
+	})
+	m.updateViewport()
+
+	client := m.fetchClient
+	return m, func() tea.Msg {
+		content, err := client.Search(context.Background(), query)
+		if err != nil {
+			return SearchErrMsg{Err: err}
+		}
+		return SearchDoneMsg{Query: query, Content: content}
 	}
 }
 

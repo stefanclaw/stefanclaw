@@ -41,5 +41,6 @@ func HelpText() string {
   /language [<name>]   Show or change response language
   /heartbeat [on|off|<interval>]  Manage heartbeat check-ins
   /fetch <url>         Fetch a web page and display as markdown
+  /search <query>      Search the web and display results
   /personality edit    Open personality files in $EDITOR`
 }
