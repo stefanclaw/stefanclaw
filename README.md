@@ -1,8 +1,8 @@
 # stefanclaw
 
-I found it too hard to install [OpenClaw](https://github.com/openclaw/openclaw), so I used a Sunday to port the core functionality to Go. The result is a single binary you can install by just copying one file. To make it easy for everybody to play with, it uses a local [Ollama](https://ollama.com) instance — no API keys, no cloud, everything runs on your machine. Just a plain old TUI!
+I found it too hard to install [OpenClaw](https://github.com/openclaw/openclaw), so I used a day off to port the minimal core functionality to Go. The result is a single binary. To make it easy for everybody to play with, it uses a local [Ollama](https://ollama.com) instance — no API keys, no cloud, everything runs on your machine. Just a plain old TUI!
 
-OpenClaw has way more features and probably a brighter future since it is foreseeable that VC money is flowing in that direction. Check out [openclaw.ai](https://openclaw.ai) for the full project. But do not hesitate to contact me in case you want this project to be continued. I believe that the usability of OpenClaw has a lot of room for improvement and that usability is paramount. BTW: I didn't have time to search for a better name.
+OpenClaw has way more features and obviously a brighter future since it is foreseeable that VC or Meta money is flowing in that direction. Check out [openclaw.ai](https://openclaw.ai) for the full project. But do not hesitate to contact me in case you want this project to be continued. I believe that the usability of OpenClaw has a lot of room for improvement and that usability is paramount. BTW: I didn't have time to search for a better name.
 
 > [!WARNING]
 > This is beta software at best and potentially dangerous to use! No warranties, no guarantees — use at your own risk.
@@ -165,22 +165,6 @@ git clone https://github.com/stefanclaw/stefanclaw.git
 cd stefanclaw
 make build
 ./stefanclaw
-```
-
-### Releasing
-
-Releases are automated via GoReleaser and GitHub Actions. To create a new release:
-
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-This triggers the release workflow, which builds binaries for all platforms and creates a GitHub Release.
-
-To test the release process locally:
-```bash
-make release-dry-run
 ```
 
 ## Configuration
