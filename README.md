@@ -4,7 +4,8 @@ I found it too hard to install [OpenClaw](https://github.com/openclaw/openclaw),
 
 OpenClaw has way more features and probably a brighter future since it is foreseeable that VC money is flowing in that direction. Check out [openclaw.ai](https://openclaw.ai) for the full project. But do not hesitate to contact me in case you want this project to be continued. I believe that the usability of OpenClaw has a lot of room for improvement and that usability is paramount. BTW: I didn't have time to search for a better name.
 
-**Warning:** This is beta software at best and potentially dangerous to use! No warranties, no guarantees — use at your own risk.
+> [!WARNING]
+> This is beta software at best and potentially dangerous to use! No warranties, no guarantees — use at your own risk.
 
 ## Installation
 
@@ -13,19 +14,19 @@ Download the latest binary for your platform:
 ```bash
 # macOS (Apple Silicon)
 curl -sL https://github.com/stefanclaw/stefanclaw/releases/latest/download/stefanclaw_darwin_arm64.tar.gz | tar xz
-sudo mv stefanclaw /usr/local/bin/
+./stefanclaw
 
 # macOS (Intel)
 curl -sL https://github.com/stefanclaw/stefanclaw/releases/latest/download/stefanclaw_darwin_amd64.tar.gz | tar xz
-sudo mv stefanclaw /usr/local/bin/
+./stefanclaw
 
 # Linux (x86_64)
 curl -sL https://github.com/stefanclaw/stefanclaw/releases/latest/download/stefanclaw_linux_amd64.tar.gz | tar xz
-sudo mv stefanclaw /usr/local/bin/
+./stefanclaw
 
 # Linux (ARM64)
 curl -sL https://github.com/stefanclaw/stefanclaw/releases/latest/download/stefanclaw_linux_arm64.tar.gz | tar xz
-sudo mv stefanclaw /usr/local/bin/
+./stefanclaw
 ```
 
 **Windows:** Download the `.zip` from the [latest release](https://github.com/stefanclaw/stefanclaw/releases/latest), extract it, and add the folder to your PATH.
