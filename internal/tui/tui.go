@@ -146,10 +146,10 @@ type displayMessage struct {
 // New creates a new TUI model.
 func New(opts Options) Model {
 	ta := textarea.New()
-	ta.Placeholder = "Type a message... (or /help for commands)"
+	ta.Placeholder = "Type a message... (Alt+Enter for newline)"
 	ta.Focus()
 	ta.CharLimit = 4096
-	ta.SetHeight(3)
+	ta.SetHeight(1)
 	ta.ShowLineNumbers = false
 	ta.Prompt = inputPromptStyle.Render("> ")
 
@@ -214,6 +214,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.streaming {
 				return m, nil
 			}
+			if msg.Alt {
+				m.textarea.InsertString("\n")
+				return m, nil
+			}
 			return m.handleSubmit()
 		}
 
@@ -221,7 +225,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		statusH := 1
-		inputH := 5
+		inputH := 3
 		viewH := m.height - statusH - inputH
 		if viewH < 1 {
 			viewH = 1
