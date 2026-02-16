@@ -71,19 +71,94 @@ func (r *Runner) Run() (*Result, error) {
 	if len(models) == 0 {
 		fmt.Fprintln(w, "")
 		fmt.Fprintln(w, "  No models found. Pull one with:")
-		fmt.Fprintln(w, "    ollama pull qwen3-next")
+		fmt.Fprintln(w, "    ollama pull qwen3:8b")
 		return nil, fmt.Errorf("no models found")
 	}
 
-	// Pick default model
-	selectedModel := models[0].Name
+	// Filter qwen3 models
+	var qwen3Models []string
 	for _, m := range models {
 		if strings.Contains(m.Name, "qwen3") {
-			selectedModel = m.Name
-			break
+			qwen3Models = append(qwen3Models, m.Name)
 		}
 	}
-	fmt.Fprintf(w, "  Found %d model(s). Using: %s\n", len(models), selectedModel)
+
+	scanner := bufio.NewScanner(r.Stdin)
+	var selectedModel string
+
+	if len(qwen3Models) > 0 {
+		fmt.Fprintf(w, "  Found %d qwen3 model(s):\n", len(qwen3Models))
+		fmt.Fprintln(w, "")
+
+		// Determine default: prefer qwen3:8b, otherwise first qwen3 model
+		defaultModel := qwen3Models[0]
+		for _, name := range qwen3Models {
+			if name == "qwen3:8b" {
+				defaultModel = name
+				break
+			}
+		}
+
+		for i, name := range qwen3Models {
+			marker := "  "
+			if name == defaultModel {
+				marker = "* "
+			}
+			fmt.Fprintf(w, "  %s%d) %s\n", marker, i+1, name)
+		}
+		fmt.Fprintln(w, "")
+		fmt.Fprintln(w, "  Tip: Smaller models (e.g. 1b, 4b) are faster but less capable.")
+		fmt.Fprintln(w, "       Larger models (e.g. 8b, 14b) are slower but produce better results.")
+		fmt.Fprintln(w, "")
+		fmt.Fprintf(w, "  Select a model [%s]: ", defaultModel)
+		var choice string
+		if scanner.Scan() {
+			choice = strings.TrimSpace(scanner.Text())
+		}
+
+		if choice == "" {
+			selectedModel = defaultModel
+		} else {
+			// Check if user entered a number
+			found := false
+			for i, name := range qwen3Models {
+				if choice == fmt.Sprintf("%d", i+1) {
+					selectedModel = name
+					found = true
+					break
+				}
+			}
+			if !found {
+				// Treat as a literal model name
+				selectedModel = choice
+			}
+		}
+	} else {
+		fmt.Fprintln(w, "")
+		fmt.Fprintln(w, "  No qwen3 models found. The recommended model is qwen3:8b.")
+		fmt.Fprintln(w, "  Install it with:")
+		fmt.Fprintln(w, "    ollama pull qwen3:8b")
+		fmt.Fprintln(w, "")
+		fmt.Fprintln(w, "  Tip: Smaller models (e.g. 1b, 4b) are faster but less capable.")
+		fmt.Fprintln(w, "       Larger models (e.g. 8b, 14b) are slower but produce better results.")
+		fmt.Fprintln(w, "")
+		fmt.Fprintln(w, "  Available models:")
+		for _, m := range models {
+			fmt.Fprintf(w, "    - %s\n", m.Name)
+		}
+		fmt.Fprintln(w, "")
+		fmt.Fprint(w, "  Enter a model name to use (or press Enter to abort): ")
+		var choice string
+		if scanner.Scan() {
+			choice = strings.TrimSpace(scanner.Text())
+		}
+		if choice == "" {
+			return nil, fmt.Errorf("no qwen3 model available — install one with: ollama pull qwen3:8b")
+		}
+		selectedModel = choice
+	}
+
+	fmt.Fprintf(w, "  Using model: %s\n", selectedModel)
 
 	// Step 3: Create config directory
 	fmt.Fprint(w, "  Creating config directory... ")
@@ -114,7 +189,6 @@ func (r *Runner) Run() (*Result, error) {
 	fmt.Fprintln(w, "")
 	detectedLang := config.DetectLanguage()
 	fmt.Fprintf(w, "  What language should I use? [%s] ", detectedLang)
-	scanner := bufio.NewScanner(r.Stdin)
 	var language string
 	if scanner.Scan() {
 		language = strings.TrimSpace(scanner.Text())

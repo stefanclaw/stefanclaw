@@ -1,8 +1,8 @@
 # stefanclaw
 
-I found it too hard to install [OpenClaw](https://github.com/openclaw/openclaw), so portted the core functionality to Go. The result is a single binary you can install by just copying one file. To make it easy for everybody to play with, it uses a local [Ollama](https://ollama.com) instance — no API keys, no cloud, everything runs on your machine. Just a plain old TUI!
+I found it too hard to install [OpenClaw](https://github.com/openclaw/openclaw), so I used a Sunday to port the core functionality to Go. The result is a single binary you can install by just copying one file. To make it easy for everybody to play with, it uses a local [Ollama](https://ollama.com) instance — no API keys, no cloud, everything runs on your machine. Just a plain old TUI!
 
-OpenClaw has way more features and probably a brighter future since it is foreseeable that VC or Meta money is flowing in that direction. Check out [openclaw.ai](https://openclaw.ai) for the full project. But do not hesitate to contact me in case you want this project to be continued. I believe that the usability of OpenClaw has a lot of room for improvement and that usability is paramount. BTW: I didn't have time to search for a better name.
+OpenClaw has way more features and probably a brighter future since it is foreseeable that VC money is flowing in that direction. Check out [openclaw.ai](https://openclaw.ai) for the full project. But do not hesitate to contact me in case you want this project to be continued. I believe that the usability of OpenClaw has a lot of room for improvement and that usability is paramount. BTW: I didn't have time to search for a better name.
 
 **Warning:** This is beta software at best and potentially dangerous to use! No warranties, no guarantees — use at your own risk.
 
@@ -13,35 +13,24 @@ Download the latest binary for your platform:
 ```bash
 # macOS (Apple Silicon)
 curl -sL https://github.com/stefanclaw/stefanclaw/releases/latest/download/stefanclaw_darwin_arm64.tar.gz | tar xz
-./stefanclaw
+sudo mv stefanclaw /usr/local/bin/
 
 # macOS (Intel)
 curl -sL https://github.com/stefanclaw/stefanclaw/releases/latest/download/stefanclaw_darwin_amd64.tar.gz | tar xz
-./stefanclaw
+sudo mv stefanclaw /usr/local/bin/
 
 # Linux (x86_64)
 curl -sL https://github.com/stefanclaw/stefanclaw/releases/latest/download/stefanclaw_linux_amd64.tar.gz | tar xz
-./stefanclaw
+sudo mv stefanclaw /usr/local/bin/
 
 # Linux (ARM64)
 curl -sL https://github.com/stefanclaw/stefanclaw/releases/latest/download/stefanclaw_linux_arm64.tar.gz | tar xz
-./stefanclaw
+sudo mv stefanclaw /usr/local/bin/
 ```
 
 **Windows:** Download the `.zip` from the [latest release](https://github.com/stefanclaw/stefanclaw/releases/latest), extract it, and add the folder to your PATH.
 
 **All releases:** [github.com/stefanclaw/stefanclaw/releases/latest](https://github.com/stefanclaw/stefanclaw/releases/latest)
-
-### Build from source
-
-```bash
-git clone https://github.com/stefanclaw/stefanclaw.git
-cd stefanclaw
-make build
-./stefanclaw
-```
-
-Requires [Go](https://go.dev/) 1.21+.
 
 ### Prerequisites
 

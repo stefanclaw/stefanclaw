@@ -34,7 +34,7 @@ func TestSetup_CreatesConfigDir(t *testing.T) {
 	defer srv.Close()
 
 	r := &Runner{
-		Stdin:   strings.NewReader("\n"),
+		Stdin:   strings.NewReader("\n\n"), // accept default model + accept default language
 		Stdout:  &bytes.Buffer{},
 		BaseURL: srv.URL,
 	}
@@ -63,7 +63,7 @@ func TestSetup_CopiesPersonalityFiles(t *testing.T) {
 	defer srv.Close()
 
 	r := &Runner{
-		Stdin:   strings.NewReader("\n"),
+		Stdin:   strings.NewReader("llama3\n\n"), // enter model name (no qwen3 available) + accept default language
 		Stdout:  &bytes.Buffer{},
 		BaseURL: srv.URL,
 	}
@@ -96,7 +96,7 @@ func TestSetup_DetectsOllama(t *testing.T) {
 
 	out := &bytes.Buffer{}
 	r := &Runner{
-		Stdin:   strings.NewReader("\n"),
+		Stdin:   strings.NewReader("\n\n"), // accept default model + accept default language
 		Stdout:  out,
 		BaseURL: srv.URL,
 	}
@@ -165,7 +165,7 @@ func TestSetup_LanguageDetectedAndStored(t *testing.T) {
 
 	out := &bytes.Buffer{}
 	r := &Runner{
-		Stdin:   strings.NewReader("\n"), // empty line = accept detected language
+		Stdin:   strings.NewReader("\n\n"), // accept default model + accept detected language
 		Stdout:  out,
 		BaseURL: srv.URL,
 	}
@@ -194,7 +194,7 @@ func TestSetup_LanguageCustom(t *testing.T) {
 	defer srv.Close()
 
 	r := &Runner{
-		Stdin:   strings.NewReader("Français\n"),
+		Stdin:   strings.NewReader("\nFrançais\n"), // accept default model + custom language
 		Stdout:  &bytes.Buffer{},
 		BaseURL: srv.URL,
 	}
