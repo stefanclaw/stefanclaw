@@ -11,26 +11,44 @@ OpenClaw has way more features and probably a brighter future since it is forese
 Download the latest binary for your platform:
 
 ```bash
+mkdir -p ~/.local/bin
+
 # macOS (Apple Silicon)
 curl -sL https://github.com/stefanclaw/stefanclaw/releases/latest/download/stefanclaw_darwin_arm64.tar.gz | tar xz
-sudo mv stefanclaw /usr/local/bin/
+mv stefanclaw ~/.local/bin/
 
 # macOS (Intel)
 curl -sL https://github.com/stefanclaw/stefanclaw/releases/latest/download/stefanclaw_darwin_amd64.tar.gz | tar xz
-sudo mv stefanclaw /usr/local/bin/
+mv stefanclaw ~/.local/bin/
 
 # Linux (x86_64)
 curl -sL https://github.com/stefanclaw/stefanclaw/releases/latest/download/stefanclaw_linux_amd64.tar.gz | tar xz
-sudo mv stefanclaw /usr/local/bin/
+mv stefanclaw ~/.local/bin/
 
 # Linux (ARM64)
 curl -sL https://github.com/stefanclaw/stefanclaw/releases/latest/download/stefanclaw_linux_arm64.tar.gz | tar xz
-sudo mv stefanclaw /usr/local/bin/
+mv stefanclaw ~/.local/bin/
+```
+
+Make sure `~/.local/bin` is in your `PATH`. Add this to your `~/.bashrc` or `~/.zshrc` if needed:
+```bash
+export PATH="$HOME/.local/bin:$PATH"
 ```
 
 **Windows:** Download the `.zip` from the [latest release](https://github.com/stefanclaw/stefanclaw/releases/latest), extract it, and add the folder to your PATH.
 
 **All releases:** [github.com/stefanclaw/stefanclaw/releases/latest](https://github.com/stefanclaw/stefanclaw/releases/latest)
+
+### Build from source
+
+```bash
+git clone https://github.com/stefanclaw/stefanclaw.git
+cd stefanclaw
+make build
+mv stefanclaw ~/.local/bin/
+```
+
+Requires [Go](https://go.dev/) 1.21+.
 
 ### Prerequisites
 
