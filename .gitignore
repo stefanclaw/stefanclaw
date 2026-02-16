@@ -1,0 +1,30 @@
+# Binary (only the root-level compiled binary)
+/stefanclaw
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Config (user data, not repo data)
+# ~/.config/stefanclaw/ is the user config dir
