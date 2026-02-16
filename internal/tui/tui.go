@@ -20,6 +20,7 @@ import (
 	"github.com/stefanclaw/stefanclaw/internal/prompt"
 	"github.com/stefanclaw/stefanclaw/internal/provider"
 	"github.com/stefanclaw/stefanclaw/internal/session"
+	"github.com/stefanclaw/stefanclaw/internal/update"
 )
 
 // Options configures the TUI.
@@ -35,6 +36,7 @@ type Options struct {
 	Language       string
 	Heartbeat      config.HeartbeatConfig
 	MaxNumCtx      int
+	Version        string
 }
 
 // ctxTiers defines the adaptive context size tiers.
@@ -89,6 +91,18 @@ type SearchDoneMsg struct {
 // SearchErrMsg carries a web search error.
 type SearchErrMsg struct {
 	Err error
+}
+
+// UpdateCheckMsg carries the result of a background update check.
+type UpdateCheckMsg struct {
+	Result *update.Result
+	Err    error
+}
+
+// UpdateApplyMsg carries the result of an update apply.
+type UpdateApplyMsg struct {
+	Result *update.Result
+	Err    error
 }
 
 // Model is the Bubble Tea model for the chat TUI.
@@ -230,6 +244,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.heartbeatEnabled {
 				initCmds = append(initCmds, m.scheduleHeartbeat())
 			}
+			// Background update check (only for release builds)
+			if v := m.options.Version; v != "" && v != "dev" {
+				initCmds = append(initCmds, m.checkForUpdate())
+			}
 			if len(initCmds) > 0 {
 				m.updateViewport()
 				initCmds = append(initCmds, m.spinner.Tick)
@@ -360,6 +378,36 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			role:    "system",
 			content: fmt.Sprintf("Search error: %v", msg.Err),
 		})
+		m.updateViewport()
+		return m, nil
+
+	case UpdateCheckMsg:
+		if msg.Err == nil && msg.Result != nil && msg.Result.UpdateAvailable {
+			m.messages = append(m.messages, displayMessage{
+				role: "system",
+				content: fmt.Sprintf("Update available: v%s → v%s. Run /update to upgrade.", msg.Result.CurrentVersion, msg.Result.LatestVersion),
+			})
+			m.updateViewport()
+		}
+		return m, nil
+
+	case UpdateApplyMsg:
+		if msg.Err != nil {
+			m.messages = append(m.messages, displayMessage{
+				role:    "system",
+				content: fmt.Sprintf("Update failed: %v", msg.Err),
+			})
+		} else if msg.Result.Applied {
+			m.messages = append(m.messages, displayMessage{
+				role:    "system",
+				content: fmt.Sprintf("Updated to v%s. Restart stefanclaw to use the new version.", msg.Result.LatestVersion),
+			})
+		} else {
+			m.messages = append(m.messages, displayMessage{
+				role:    "system",
+				content: "Already running the latest version.",
+			})
+		}
 		m.updateViewport()
 		return m, nil
 
@@ -669,6 +717,14 @@ func (m *Model) scheduleHeartbeat() tea.Cmd {
 	return tea.Tick(d, func(time.Time) tea.Msg {
 		return HeartbeatTickMsg{}
 	})
+}
+
+func (m *Model) checkForUpdate() tea.Cmd {
+	version := m.options.Version
+	return func() tea.Msg {
+		res, err := update.Check(context.Background(), version)
+		return UpdateCheckMsg{Result: res, Err: err}
+	}
 }
 
 func (m *Model) triggerHeartbeat() tea.Cmd {

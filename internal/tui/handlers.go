@@ -7,6 +7,8 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/stefanclaw/stefanclaw/internal/update"
 )
 
 func handleQuit(m *Model, args string) (tea.Model, tea.Cmd) {
@@ -333,6 +335,29 @@ func handleSearch(m *Model, args string) (tea.Model, tea.Cmd) {
 			return SearchErrMsg{Err: err}
 		}
 		return SearchDoneMsg{Query: args, Content: content}
+	}
+}
+
+func handleUpdate(m *Model, args string) (tea.Model, tea.Cmd) {
+	version := m.options.Version
+	if version == "" || version == "dev" {
+		m.messages = append(m.messages, displayMessage{
+			role:    "system",
+			content: "Auto-update is not available for development builds.",
+		})
+		m.updateViewport()
+		return m, nil
+	}
+
+	m.messages = append(m.messages, displayMessage{
+		role:    "system",
+		content: "Checking for updates...",
+	})
+	m.updateViewport()
+
+	return m, func() tea.Msg {
+		res, err := update.Apply(context.Background(), version)
+		return UpdateApplyMsg{Result: res, Err: err}
 	}
 }
 

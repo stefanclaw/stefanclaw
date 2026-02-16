@@ -50,7 +50,7 @@ func TestParseSlashCommand_NotACommand(t *testing.T) {
 
 func TestHelpText(t *testing.T) {
 	help := HelpText()
-	commands := []string{"/help", "/quit", "/bye", "/exit", "/models", "/model", "/session", "/clear", "/memory", "/remember", "/forget", "/language", "/heartbeat", "/fetch", "/search", "/personality"}
+	commands := []string{"/help", "/quit", "/bye", "/exit", "/models", "/model", "/session", "/clear", "/memory", "/remember", "/forget", "/language", "/heartbeat", "/fetch", "/search", "/personality", "/update", "/upgrade"}
 	for _, cmd := range commands {
 		if !contains(help, cmd) {
 			t.Errorf("help text missing command: %s", cmd)
@@ -153,6 +153,7 @@ func TestRegistryCoversAllCommands(t *testing.T) {
 		"quit", "help", "clear", "models", "model",
 		"session", "memory", "remember", "forget",
 		"language", "heartbeat", "fetch", "search", "personality",
+		"update",
 	}
 	for _, name := range expected {
 		found := false
@@ -257,6 +258,26 @@ func TestParseHeartbeatCommand(t *testing.T) {
 		}
 		if cmd.Args != tt.wantArgs {
 			t.Errorf("ParseCommand(%q).Args = %q, want %q", tt.input, cmd.Args, tt.wantArgs)
+		}
+	}
+}
+
+func TestParseUpdateCommand(t *testing.T) {
+	tests := []struct {
+		input    string
+		wantName string
+	}{
+		{"/update", "update"},
+		{"/upgrade", "upgrade"},
+	}
+	for _, tt := range tests {
+		cmd := ParseCommand(tt.input)
+		if cmd == nil {
+			t.Errorf("ParseCommand(%q) = nil", tt.input)
+			continue
+		}
+		if cmd.Name != tt.wantName {
+			t.Errorf("ParseCommand(%q).Name = %q, want %q", tt.input, cmd.Name, tt.wantName)
 		}
 	}
 }

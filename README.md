@@ -6,15 +6,38 @@ OpenClaw has way more features and probably a brighter future since it is forese
 
 **Warning:** This is beta software at best and potentially dangerous to use! No warranties, no guarantees — use at your own risk.
 
-## Quickstart
+## Installation
+
+Download the latest binary for your platform:
 
 ```bash
-# Prerequisites: Ollama running locally
-ollama serve
+# macOS (Apple Silicon)
+curl -sL https://github.com/stefanclaw/stefanclaw/releases/latest/download/stefanclaw_darwin_arm64.tar.gz | tar xz
+sudo mv stefanclaw /usr/local/bin/
 
-# Build and run
-make build
-./stefanclaw
+# macOS (Intel)
+curl -sL https://github.com/stefanclaw/stefanclaw/releases/latest/download/stefanclaw_darwin_amd64.tar.gz | tar xz
+sudo mv stefanclaw /usr/local/bin/
+
+# Linux (x86_64)
+curl -sL https://github.com/stefanclaw/stefanclaw/releases/latest/download/stefanclaw_linux_amd64.tar.gz | tar xz
+sudo mv stefanclaw /usr/local/bin/
+
+# Linux (ARM64)
+curl -sL https://github.com/stefanclaw/stefanclaw/releases/latest/download/stefanclaw_linux_arm64.tar.gz | tar xz
+sudo mv stefanclaw /usr/local/bin/
+```
+
+**Windows:** Download the `.zip` from the [latest release](https://github.com/stefanclaw/stefanclaw/releases/latest), extract it, and add the folder to your PATH.
+
+**All releases:** [github.com/stefanclaw/stefanclaw/releases/latest](https://github.com/stefanclaw/stefanclaw/releases/latest)
+
+### Prerequisites
+
+[Ollama](https://ollama.ai) must be running locally:
+
+```bash
+ollama serve
 ```
 
 On first run, an onboarding wizard configures your setup (name, language, model).
@@ -33,7 +56,8 @@ On first run, an onboarding wizard configures your setup (name, language, model)
 - **Adaptive context scaling** — starts with 4K context, automatically grows to 8K/16K/32K as conversations get longer
 - **Web fetch** — fetch any web page as markdown via Jina Reader
 - **Web search** — search the web via DuckDuckGo (no API key needed)
-- Slash commands: `/help`, `/quit`, `/bye`, `/exit`, `/models`, `/model`, `/session`, `/memory`, `/remember`, `/forget`, `/clear`, `/language`, `/heartbeat`, `/fetch`, `/search`, `/personality edit`
+- **Auto-update** — checks for updates on startup, upgrade in-place with `/update` or `--update`
+- Slash commands: `/help`, `/quit`, `/bye`, `/exit`, `/models`, `/model`, `/session`, `/memory`, `/remember`, `/forget`, `/clear`, `/language`, `/heartbeat`, `/fetch`, `/search`, `/personality edit`, `/update`
 
 ## Language Support
 
@@ -70,6 +94,15 @@ Search the web directly from the chat. Powered by DuckDuckGo routed through Jina
 
 - `/search capital of france` — search and display results
 
+## Updating
+
+Stefanclaw checks for updates on startup and notifies you when a new version is available.
+
+- `/update` — download and install the latest version (in TUI)
+- `stefanclaw --update` — update from the command line
+
+After updating, restart stefanclaw to use the new version.
+
 ## Adaptive Context Scaling
 
 Ollama defaults to 4096 tokens of context (`num_ctx`). Stefanclaw automatically scales the context window as conversations grow, to avoid wasting VRAM on short chats while supporting longer ones.
@@ -102,6 +135,7 @@ internal/
   memory/           Persistent memory, fact extraction, search
   onboard/          First-run wizard
   tui/              Bubble Tea terminal UI, command registry, handlers
+  update/           Auto-update via GitHub Releases
   channel/          Channel interface (future: Telegram, etc.)
 personality/        Default personality templates (embedded)
 ```
@@ -113,6 +147,30 @@ make test    # Run tests
 make build   # Build binary
 make lint    # Run go vet
 make clean   # Remove binary
+```
+
+Build from source:
+```bash
+git clone https://github.com/stefanclaw/stefanclaw.git
+cd stefanclaw
+make build
+./stefanclaw
+```
+
+### Releasing
+
+Releases are automated via GoReleaser and GitHub Actions. To create a new release:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+This triggers the release workflow, which builds binaries for all platforms and creates a GitHub Release.
+
+To test the release process locally:
+```bash
+make release-dry-run
 ```
 
 ## Configuration

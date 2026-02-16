@@ -15,6 +15,7 @@ import (
 	"github.com/stefanclaw/stefanclaw/internal/provider/ollama"
 	"github.com/stefanclaw/stefanclaw/internal/session"
 	"github.com/stefanclaw/stefanclaw/internal/tui"
+	"github.com/stefanclaw/stefanclaw/internal/update"
 )
 
 var version = "dev"
@@ -30,6 +31,9 @@ func main() {
 			return
 		case "--uninstall":
 			runUninstall()
+			return
+		case "--update":
+			runUpdate()
 			return
 		}
 	}
@@ -108,11 +112,30 @@ func run() error {
 		Language:       cfg.Language,
 		Heartbeat:      cfg.Heartbeat,
 		MaxNumCtx:      cfg.Provider.Ollama.MaxNumCtx,
+		Version:        version,
 	})
 
 	p := tea.NewProgram(tuiModel, tea.WithAltScreen())
 	_, err = p.Run()
 	return err
+}
+
+func runUpdate() {
+	if version == "dev" {
+		fmt.Println("Auto-update is not available for development builds.")
+		return
+	}
+	fmt.Println("Checking for updates...")
+	res, err := update.Apply(context.Background(), version)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Update failed: %v\n", err)
+		os.Exit(1)
+	}
+	if res.Applied {
+		fmt.Printf("Updated to v%s. Restart stefanclaw to use the new version.\n", res.LatestVersion)
+	} else {
+		fmt.Println("Already running the latest version.")
+	}
 }
 
 func runUninstall() {
@@ -153,6 +176,7 @@ Usage:
   stefanclaw              Start the TUI chat interface
   stefanclaw --version    Print version and exit
   stefanclaw --help       Show this help
+  stefanclaw --update     Update to the latest version
   stefanclaw --uninstall  Remove all stefanclaw data from your system
 
 Slash commands (in TUI):
@@ -169,6 +193,7 @@ Slash commands (in TUI):
   /language [<name>]   Show or change response language
   /heartbeat [on|off|<interval>]  Manage heartbeat check-ins
   /personality edit    Open personality files for editing
+  /update              Check for updates and upgrade
 
 Configuration:
   Config is stored in %s

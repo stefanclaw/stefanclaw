@@ -133,6 +133,13 @@ func init() {
 			Usage:       "/personality edit",
 			Handler:     handlePersonality,
 		},
+		{
+			Name:        "update",
+			Aliases:     []string{"upgrade"},
+			Description: "Check for updates and upgrade stefanclaw",
+			Usage:       "/update",
+			Handler:     handleUpdate,
+		},
 	}
 }
 

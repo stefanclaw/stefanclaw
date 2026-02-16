@@ -1,4 +1,4 @@
-.PHONY: build test lint clean
+.PHONY: build test lint clean release-dry-run
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS := -ldflags "-X main.version=$(VERSION)"
@@ -14,3 +14,6 @@ lint:
 
 clean:
 	rm -f stefanclaw
+
+release-dry-run:
+	goreleaser release --snapshot --clean

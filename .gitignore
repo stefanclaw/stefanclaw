@@ -1,6 +1,9 @@
 # Binary (only the root-level compiled binary)
 /stefanclaw
 
+# GoReleaser output
+dist/
+
 # Go
 *.exe
 *.exe~
