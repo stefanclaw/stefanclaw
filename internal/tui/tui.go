@@ -4,13 +4,17 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/stefanclaw/stefanclaw/internal/config"
+	"github.com/stefanclaw/stefanclaw/internal/fetch"
 	"github.com/stefanclaw/stefanclaw/internal/memory"
 	"github.com/stefanclaw/stefanclaw/internal/prompt"
 	"github.com/stefanclaw/stefanclaw/internal/provider"
@@ -27,6 +31,17 @@ type Options struct {
 	Model          string
 	Session        *session.Session
 	PersonalityDir string
+	Language       string
+	Heartbeat      config.HeartbeatConfig
+	MaxNumCtx      int
+}
+
+// ctxTiers defines the adaptive context size tiers.
+var ctxTiers = []int{4096, 8192, 16384, 32768}
+
+// StreamStartedMsg carries the channel after the stream connection is established.
+type StreamStartedMsg struct {
+	Ch <-chan provider.StreamDelta
 }
 
 // StreamDeltaMsg carries a streaming token.
@@ -50,11 +65,26 @@ type ModelListMsg struct {
 	Err    error
 }
 
+// HeartbeatTickMsg signals a heartbeat check-in is due.
+type HeartbeatTickMsg struct{}
+
+// FetchDoneMsg carries the result of a web fetch.
+type FetchDoneMsg struct {
+	URL     string
+	Content string
+}
+
+// FetchErrMsg carries a web fetch error.
+type FetchErrMsg struct {
+	Err error
+}
+
 // Model is the Bubble Tea model for the chat TUI.
 type Model struct {
 	options  Options
 	viewport viewport.Model
 	textarea textarea.Model
+	spinner  spinner.Model
 	messages []displayMessage
 	width    int
 	height   int
@@ -63,11 +93,23 @@ type Model struct {
 	streamContent   string
 	streamCancelFn  context.CancelFunc
 	streamCh        <-chan provider.StreamDelta
+	waiting         bool // true while waiting for first token
 
-	mdRenderer *glamour.TermRenderer
-	err        error
-	ready      bool
-	quitting   bool
+	mdRenderer  *glamour.TermRenderer
+	err         error
+	ready       bool
+	quitting    bool
+	autoGreet       bool // trigger LLM greeting on first window size
+	bootstrapStream bool // true when current stream is the first-run greeting
+
+	heartbeatInterval time.Duration
+	heartbeatEnabled  bool
+	heartbeatStream   bool // true when current stream is a heartbeat check-in
+
+	currentNumCtx int // Current adaptive context size
+	maxNumCtx     int // Upper limit from config
+
+	fetchClient *fetch.Client
 }
 
 type displayMessage struct {
@@ -78,10 +120,10 @@ type displayMessage struct {
 // New creates a new TUI model.
 func New(opts Options) Model {
 	ta := textarea.New()
-	ta.Placeholder = "Type a message... (or /help)"
+	ta.Placeholder = "Type a message... (or /help for commands)"
 	ta.Focus()
 	ta.CharLimit = 4096
-	ta.SetHeight(3)
+	ta.SetHeight(1)
 	ta.ShowLineNumbers = false
 	ta.Prompt = inputPromptStyle.Render("> ")
 
@@ -92,16 +134,39 @@ func New(opts Options) Model {
 		glamour.WithWordWrap(76),
 	)
 
+	sp := spinner.New()
+	sp.Spinner = spinner.Dot
+	sp.Style = assistantLabelStyle
+
+	isFirstRun := opts.PromptAsm != nil && opts.PromptAsm.HasBootstrap()
+
+	heartbeatInterval, _ := time.ParseDuration(opts.Heartbeat.Interval)
+	if heartbeatInterval <= 0 {
+		heartbeatInterval = 4 * time.Hour
+	}
+
+	maxCtx := opts.MaxNumCtx
+	if maxCtx <= 0 {
+		maxCtx = 32768
+	}
+
 	return Model{
-		options:    opts,
-		textarea:   ta,
-		viewport:   vp,
-		mdRenderer: renderer,
+		options:           opts,
+		textarea:          ta,
+		viewport:          vp,
+		spinner:           sp,
+		mdRenderer:        renderer,
+		autoGreet:         isFirstRun,
+		heartbeatEnabled:  opts.Heartbeat.Enabled,
+		heartbeatInterval: heartbeatInterval,
+		currentNumCtx:     ctxTiers[0],
+		maxNumCtx:         maxCtx,
+		fetchClient:       fetch.New(),
 	}
 }
 
 func (m Model) Init() tea.Cmd {
-	return textarea.Blink
+	return tea.Batch(textarea.Blink, m.spinner.Tick)
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -130,7 +195,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		statusH := 1
-		inputH := 5
+		inputH := 3
 		viewH := m.height - statusH - inputH
 		if viewH < 1 {
 			viewH = 1
@@ -138,16 +203,83 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport.Width = m.width
 		m.viewport.Height = viewH
 		m.textarea.SetWidth(m.width)
-		m.ready = true
+
+		if !m.ready {
+			m.ready = true
+			var initCmds []tea.Cmd
+			if m.autoGreet {
+				m.autoGreet = false
+				m.messages = append(m.messages, displayMessage{
+					role:    "system",
+					content: "Starting up... waiting for model to respond.",
+				})
+				initCmds = append(initCmds, m.triggerAutoGreet())
+			}
+			if m.heartbeatEnabled {
+				initCmds = append(initCmds, m.scheduleHeartbeat())
+			}
+			if len(initCmds) > 0 {
+				m.updateViewport()
+				initCmds = append(initCmds, m.spinner.Tick)
+				return m, tea.Batch(initCmds...)
+			}
+		}
+		m.updateViewport()
+
+	case StreamStartedMsg:
+		m.streamCh = msg.Ch
+		m.waiting = true
+		m.updateViewport()
+		return m, tea.Batch(waitForDelta(m.streamCh), m.spinner.Tick)
 
 	case StreamDeltaMsg:
+		m.waiting = false
 		m.streamContent += msg.Content
 		m.updateViewport()
-		return m, m.waitForDelta()
+		return m, waitForDelta(m.streamCh)
 
 	case StreamDoneMsg:
 		m.streaming = false
+		m.waiting = false
+		wasHeartbeat := m.heartbeatStream
+		m.heartbeatStream = false
+
+		// Delete BOOTSTRAP.md after first greeting so auto-greet doesn't fire again
+		if m.bootstrapStream {
+			m.bootstrapStream = false
+			if m.options.PromptAsm != nil {
+				m.options.PromptAsm.DeleteBootstrap()
+			}
+		}
+
+		// Adaptive context scaling: check if we need to grow
+		if msg.Usage != nil && msg.Usage.PromptTokens > 0 {
+			threshold := int(float64(m.currentNumCtx) * 0.6)
+			if msg.Usage.PromptTokens > threshold {
+				for _, tier := range ctxTiers {
+					if tier > m.currentNumCtx && tier <= m.maxNumCtx {
+						m.currentNumCtx = tier
+						m.messages = append(m.messages, displayMessage{
+							role: "system",
+							content: fmt.Sprintf("Context expanded to %d tokens (conversation is growing). The next response may take a moment while the model reloads.", tier),
+						})
+						break
+					}
+				}
+			}
+		}
+
 		if m.streamContent != "" {
+			// Heartbeat skip: discard silently
+			if wasHeartbeat && strings.Contains(m.streamContent, "HEARTBEAT_SKIP") {
+				m.streamContent = ""
+				m.updateViewport()
+				if m.heartbeatEnabled {
+					return m, m.scheduleHeartbeat()
+				}
+				return m, nil
+			}
+
 			m.messages = append(m.messages, displayMessage{
 				role:    "assistant",
 				content: m.streamContent,
@@ -162,16 +294,44 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.streamContent = ""
 		m.updateViewport()
+
+		// Reschedule heartbeat after a response completes
+		if wasHeartbeat && m.heartbeatEnabled {
+			return m, m.scheduleHeartbeat()
+		}
 		return m, nil
 
 	case StreamErrMsg:
 		m.streaming = false
+		m.waiting = false
 		m.err = msg.Err
 		m.messages = append(m.messages, displayMessage{
 			role:    "system",
 			content: fmt.Sprintf("Error: %v", msg.Err),
 		})
 		m.streamContent = ""
+		m.updateViewport()
+		return m, nil
+
+	case HeartbeatTickMsg:
+		if m.streaming || !m.heartbeatEnabled {
+			return m, nil
+		}
+		return m, m.triggerHeartbeat()
+
+	case FetchDoneMsg:
+		m.messages = append(m.messages, displayMessage{
+			role:    "system",
+			content: fmt.Sprintf("Fetched %s:\n\n%s", msg.URL, msg.Content),
+		})
+		m.updateViewport()
+		return m, nil
+
+	case FetchErrMsg:
+		m.messages = append(m.messages, displayMessage{
+			role:    "system",
+			content: fmt.Sprintf("Fetch error: %v", msg.Err),
+		})
 		m.updateViewport()
 		return m, nil
 
@@ -198,6 +358,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.updateViewport()
 		return m, nil
+	}
+
+	// Update spinner when streaming with no content yet
+	if m.streaming && m.streamContent == "" {
+		var spCmd tea.Cmd
+		m.spinner, spCmd = m.spinner.Update(msg)
+		cmds = append(cmds, spCmd)
+		m.updateViewport()
 	}
 
 	// Update textarea
@@ -260,21 +428,31 @@ func (m *Model) handleSubmit() (tea.Model, tea.Cmd) {
 		})
 	}
 
-	m.updateViewport()
-
 	// Start streaming
 	m.streaming = true
+	m.waiting = true
 	m.streamContent = ""
+
+	// Update viewport after setting waiting=true so the spinner renders immediately
+	m.updateViewport()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	m.streamCancelFn = cancel
 
-	return m, m.startStream(ctx, input)
+	var cmds []tea.Cmd
+	cmds = append(cmds, m.startStream(ctx, input), m.spinner.Tick)
+
+	// Reset heartbeat timer on user activity
+	if m.heartbeatEnabled {
+		cmds = append(cmds, m.scheduleHeartbeat())
+	}
+
+	return m, tea.Batch(cmds...)
 }
 
 func (m *Model) handleCommand(cmd *Command) (tea.Model, tea.Cmd) {
 	switch cmd.Name {
-	case "quit", "q":
+	case "quit", "q", "bye", "exit":
 		m.quitting = true
 		return m, tea.Quit
 
@@ -321,6 +499,31 @@ func (m *Model) handleCommand(cmd *Command) (tea.Model, tea.Cmd) {
 
 	case "forget":
 		return m.handleForgetCommand(cmd.Args)
+
+	case "language":
+		if cmd.Args == "" {
+			m.messages = append(m.messages, displayMessage{
+				role:    "system",
+				content: fmt.Sprintf("Current language: %s\nUsage: /language <name>", m.options.Language),
+			})
+		} else {
+			m.options.Language = cmd.Args
+			if m.options.PromptAsm != nil {
+				m.options.SystemPrompt = m.options.PromptAsm.BuildSystemPromptWithLanguage(cmd.Args)
+			}
+			m.messages = append(m.messages, displayMessage{
+				role:    "system",
+				content: fmt.Sprintf("Language changed to: %s", cmd.Args),
+			})
+		}
+		m.updateViewport()
+		return m, nil
+
+	case "heartbeat":
+		return m.handleHeartbeatCommand(cmd.Args)
+
+	case "fetch":
+		return m.handleFetchCommand(cmd.Args)
 
 	case "personality":
 		if cmd.Args == "edit" {
@@ -431,43 +634,92 @@ func (m *Model) buildMessages(userInput string) []provider.Message {
 }
 
 func (m *Model) startStream(ctx context.Context, userInput string) tea.Cmd {
+	// Capture what we need — the closure must not rely on m fields surviving
+	sysProm := m.options.SystemPrompt
+	model := m.options.Model
+	prov := m.options.Provider
+	msgs := m.buildMessages(userInput)
+	numCtx := m.currentNumCtx
+
 	return func() tea.Msg {
-		msgs := m.buildMessages(userInput)
-		ch, err := m.options.Provider.StreamChat(ctx, provider.ChatRequest{
-			Model:    m.options.Model,
+		_ = sysProm // already included via buildMessages
+		ch, err := prov.StreamChat(ctx, provider.ChatRequest{
+			Model:    model,
 			Messages: msgs,
+			NumCtx:   numCtx,
 		})
 		if err != nil {
 			return StreamErrMsg{Err: err}
 		}
-
-		m.streamCh = ch
-		return readFromChannel(ch)
+		return StreamStartedMsg{Ch: ch}
 	}
 }
 
-func (m *Model) waitForDelta() tea.Cmd {
-	ch := m.streamCh
+func (m *Model) triggerAutoGreet() tea.Cmd {
+	m.streaming = true
+	m.waiting = true
+	m.streamContent = ""
+	m.bootstrapStream = true
+
+	ctx, cancel := context.WithCancel(context.Background())
+	m.streamCancelFn = cancel
+
+	// Capture values for the closure
+	sysProm := m.options.SystemPrompt
+	model := m.options.Model
+	prov := m.options.Provider
+	lang := m.options.Language
+	numCtx := m.currentNumCtx
+
+	return func() tea.Msg {
+		var msgs []provider.Message
+		if sysProm != "" {
+			msgs = append(msgs, provider.Message{
+				Role:    "system",
+				Content: sysProm,
+			})
+		}
+
+		greetMsg := "Hello! Please greet me briefly and let me know you're ready to chat."
+		if lang != "" && lang != "English" {
+			greetMsg += " Respond in " + lang + "."
+		}
+
+		msgs = append(msgs, provider.Message{
+			Role:    "user",
+			Content: greetMsg,
+		})
+
+		ch, err := prov.StreamChat(ctx, provider.ChatRequest{
+			Model:    model,
+			Messages: msgs,
+			NumCtx:   numCtx,
+		})
+		if err != nil {
+			return StreamErrMsg{Err: err}
+		}
+		return StreamStartedMsg{Ch: ch}
+	}
+}
+
+// waitForDelta reads the next item from a stream channel.
+func waitForDelta(ch <-chan provider.StreamDelta) tea.Cmd {
 	if ch == nil {
 		return nil
 	}
 	return func() tea.Msg {
-		return readFromChannel(ch)
+		delta, ok := <-ch
+		if !ok {
+			return StreamDoneMsg{}
+		}
+		if delta.Err != nil {
+			return StreamErrMsg{Err: delta.Err}
+		}
+		if delta.Done {
+			return StreamDoneMsg{Usage: delta.Usage}
+		}
+		return StreamDeltaMsg{Content: delta.Content}
 	}
-}
-
-func readFromChannel(ch <-chan provider.StreamDelta) tea.Msg {
-	delta, ok := <-ch
-	if !ok {
-		return StreamDoneMsg{}
-	}
-	if delta.Err != nil {
-		return StreamErrMsg{Err: delta.Err}
-	}
-	if delta.Done {
-		return StreamDoneMsg{Usage: delta.Usage}
-	}
-	return StreamDeltaMsg{Content: delta.Content}
 }
 
 func (m *Model) renderMarkdown(content string) string {
@@ -495,6 +747,12 @@ func (m *Model) updateViewport() {
 		case "system":
 			lines = append(lines, systemMsgStyle.Render(msg.content))
 		}
+		lines = append(lines, "")
+	}
+
+	// Show spinner while waiting for LLM response
+	if m.streaming && m.streamContent == "" {
+		lines = append(lines, m.spinner.View()+" Thinking...")
 		lines = append(lines, "")
 	}
 
@@ -580,6 +838,134 @@ func (m *Model) handleRememberCommand(fact string) (tea.Model, tea.Cmd) {
 	}
 	m.updateViewport()
 	return m, nil
+}
+
+func (m *Model) handleHeartbeatCommand(args string) (tea.Model, tea.Cmd) {
+	switch args {
+	case "":
+		status := "disabled"
+		if m.heartbeatEnabled {
+			status = "enabled"
+		}
+		m.messages = append(m.messages, displayMessage{
+			role: "system",
+			content: fmt.Sprintf("Heartbeat: %s\nInterval: %s",
+				status, m.heartbeatInterval),
+		})
+	case "on":
+		m.heartbeatEnabled = true
+		m.messages = append(m.messages, displayMessage{
+			role:    "system",
+			content: fmt.Sprintf("Heartbeat enabled (every %s)", m.heartbeatInterval),
+		})
+		m.updateViewport()
+		return m, m.scheduleHeartbeat()
+	case "off":
+		m.heartbeatEnabled = false
+		m.messages = append(m.messages, displayMessage{
+			role:    "system",
+			content: "Heartbeat disabled.",
+		})
+	default:
+		dur, err := time.ParseDuration(args)
+		if err != nil {
+			m.messages = append(m.messages, displayMessage{
+				role:    "system",
+				content: fmt.Sprintf("Invalid interval: %s\nUsage: /heartbeat [on|off|<duration>]", args),
+			})
+		} else {
+			m.heartbeatInterval = dur
+			m.messages = append(m.messages, displayMessage{
+				role:    "system",
+				content: fmt.Sprintf("Heartbeat interval set to %s", dur),
+			})
+			if m.heartbeatEnabled {
+				m.updateViewport()
+				return m, m.scheduleHeartbeat()
+			}
+		}
+	}
+	m.updateViewport()
+	return m, nil
+}
+
+func (m *Model) scheduleHeartbeat() tea.Cmd {
+	d := m.heartbeatInterval
+	return tea.Tick(d, func(time.Time) tea.Msg {
+		return HeartbeatTickMsg{}
+	})
+}
+
+func (m *Model) triggerHeartbeat() tea.Cmd {
+	m.streaming = true
+	m.streamContent = ""
+	m.heartbeatStream = true
+
+	ctx, cancel := context.WithCancel(context.Background())
+	m.streamCancelFn = cancel
+
+	sysProm := m.options.SystemPrompt
+	model := m.options.Model
+	prov := m.options.Provider
+	lang := m.options.Language
+	numCtx := m.currentNumCtx
+
+	return func() tea.Msg {
+		var msgs []provider.Message
+		if sysProm != "" {
+			msgs = append(msgs, provider.Message{
+				Role:    "system",
+				Content: sysProm,
+			})
+		}
+
+		// Include conversation context
+		heartbeatPrompt := "[Heartbeat check-in] Review the user's memory and conversation context. If there's something relevant to say, say it briefly. If not, respond with exactly 'HEARTBEAT_SKIP'."
+		if lang != "" && lang != "English" {
+			heartbeatPrompt += " Respond in " + lang + "."
+		}
+
+		msgs = append(msgs, provider.Message{
+			Role:    "user",
+			Content: heartbeatPrompt,
+		})
+
+		ch, err := prov.StreamChat(ctx, provider.ChatRequest{
+			Model:    model,
+			Messages: msgs,
+			NumCtx:   numCtx,
+		})
+		if err != nil {
+			return StreamErrMsg{Err: err}
+		}
+		return StreamStartedMsg{Ch: ch}
+	}
+}
+
+func (m *Model) handleFetchCommand(rawURL string) (tea.Model, tea.Cmd) {
+	if rawURL == "" {
+		m.messages = append(m.messages, displayMessage{
+			role:    "system",
+			content: "Usage: /fetch <url>",
+		})
+		m.updateViewport()
+		return m, nil
+	}
+
+	m.messages = append(m.messages, displayMessage{
+		role:    "system",
+		content: fmt.Sprintf("Fetching %s...", rawURL),
+	})
+	m.updateViewport()
+
+	client := m.fetchClient
+	return m, func() tea.Msg {
+		content, err := client.Fetch(context.Background(), rawURL)
+		if err != nil {
+			return FetchErrMsg{Err: err}
+		}
+		return FetchDoneMsg{URL: rawURL, Content: content}
+	}
 }
 
 func (m *Model) handleForgetCommand(keyword string) (tea.Model, tea.Cmd) {

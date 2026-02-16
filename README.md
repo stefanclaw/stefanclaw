@@ -1,6 +1,8 @@
 # stefanclaw
 
-A personal AI assistant that ships as a single Go binary. Chat with local LLMs via Ollama through a terminal UI with personality, memory, and session management.
+A simplified Go rewrite of [OpenClaw](https://github.com/openclaw/openclaw) — the open-source personal AI assistant that runs locally and connects to messaging channels. Stefanclaw focuses on a single-binary terminal experience with Ollama, while the original OpenClaw (TypeScript/Node.js) supports WhatsApp, Telegram, Slack, Discord, Signal, iMessage, Teams, browser automation, and more. See [openclaw.ai](https://openclaw.ai) for the full project.
+
+Stefanclaw ships as a single Go binary. Chat with local LLMs via Ollama through a terminal UI with personality, memory, and session management.
 
 ## Quickstart
 
@@ -13,25 +15,78 @@ make build
 ./stefanclaw
 ```
 
-On first run, an onboarding wizard configures your setup.
+On first run, an onboarding wizard configures your setup (name, language, model).
 
 ## Features
 
 - TUI chat interface with streaming responses and markdown rendering
 - Ollama as the LLM backend
-- Personality system (IDENTITY, SOUL, USER, MEMORY, BOOT, BOOTSTRAP)
+- Personality system (IDENTITY, SOUL, USER, MEMORY, BOOT, HEARTBEAT, BOOTSTRAP)
 - Persistent memory with automatic fact extraction
 - Session management with JSONL transcripts
 - Conversation compaction for long chats
 - First-run onboarding wizard
-- Slash commands: `/help`, `/models`, `/model`, `/session`, `/memory`, `/remember`, `/forget`, `/clear`, `/personality edit`
+- **Language support** — auto-detects system locale, asks during onboarding, LLM responds in your language
+- **Heartbeat check-ins** — configurable periodic proactive messages when idle
+- **Adaptive context scaling** — starts with 4K context, automatically grows to 8K/16K/32K as conversations get longer
+- **Web fetch** — fetch any web page as markdown via Jina Reader
+- Slash commands: `/help`, `/quit`, `/bye`, `/exit`, `/models`, `/model`, `/session`, `/memory`, `/remember`, `/forget`, `/clear`, `/language`, `/heartbeat`, `/fetch`, `/personality edit`
+
+## Language Support
+
+Stefanclaw detects your system language from `LC_ALL`, `LANG`, or `LANGUAGE` environment variables. During onboarding, you can accept the detected language or choose a different one. The LLM will respond in your chosen language.
+
+- `/language` — show current language
+- `/language Deutsch` — switch to German
+
+## Heartbeat
+
+Heartbeat check-ins are periodic proactive messages from the assistant when you've been idle. The assistant reviews memory and conversation context, and speaks up only if there's something relevant.
+
+- `/heartbeat` — show status and interval
+- `/heartbeat on` — enable heartbeats
+- `/heartbeat off` — disable heartbeats
+- `/heartbeat 2h` — set interval to 2 hours
+
+Configure in `config.yaml`:
+```yaml
+heartbeat:
+  enabled: false
+  interval: "4h"
+```
+
+## Web Fetch
+
+Fetch any web page and display it as markdown directly in the chat. Powered by [Jina Reader](https://r.jina.ai/) — no API key needed (free tier: 100 RPM). Content is capped at 32KB.
+
+- `/fetch https://example.com` — fetch and display a page
+
+## Adaptive Context Scaling
+
+Ollama defaults to 4096 tokens of context (`num_ctx`). Stefanclaw automatically scales the context window as conversations grow, to avoid wasting VRAM on short chats while supporting longer ones.
+
+| Tier | Context size | Triggers when |
+|------|-------------|---------------|
+| 1 | 4096 | Initial |
+| 2 | 8192 | Prompt tokens exceed 60% of current size |
+| 3 | 16384 | Prompt tokens exceed 60% of current size |
+| 4 | 32768 | Prompt tokens exceed 60% of current size |
+
+When the context grows, a system message appears and the model reloads briefly (a few seconds). Configure the upper limit in `config.yaml`:
+
+```yaml
+provider:
+  ollama:
+    max_num_ctx: 32768
+```
 
 ## Architecture
 
 ```
 cmd/stefanclaw/     Entry point, wiring, CLI flags
 internal/
-  config/           YAML config, paths
+  config/           YAML config, paths, locale detection
+  fetch/            Web fetch via Jina Reader
   prompt/           Personality file loader, system prompt assembler
   provider/ollama/  Ollama REST API client (streaming + blocking)
   session/          Session store, JSONL transcripts, compaction
@@ -45,7 +100,7 @@ personality/        Default personality templates (embedded)
 ## Development
 
 ```bash
-make test    # Run tests (67 tests across all packages)
+make test    # Run tests
 make build   # Build binary
 make lint    # Run go vet
 make clean   # Remove binary
@@ -70,7 +125,7 @@ rm ./stefanclaw                # Remove the binary (or wherever you placed it)
 
 This removes:
 - `~/.config/stefanclaw/config.yaml` - configuration
-- `~/.config/stefanclaw/personality/` - personality files (IDENTITY, SOUL, USER, MEMORY, BOOT, BOOTSTRAP)
+- `~/.config/stefanclaw/personality/` - personality files (IDENTITY, SOUL, USER, MEMORY, BOOT, HEARTBEAT, BOOTSTRAP)
 - `~/.config/stefanclaw/sessions/` - all conversation history
 - The binary itself (you must delete it manually)
 

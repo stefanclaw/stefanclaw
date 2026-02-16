@@ -158,6 +158,58 @@ func TestChat_ContextCancellation(t *testing.T) {
 	}
 }
 
+func TestChat_NumCtxIncluded(t *testing.T) {
+	var receivedBody map[string]interface{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewDecoder(r.Body).Decode(&receivedBody)
+		json.NewEncoder(w).Encode(ollamaChatResponse{
+			Model:   "qwen3:8b",
+			Message: provider.Message{Role: "assistant", Content: "ok"},
+			Done:    true,
+		})
+	}))
+	defer srv.Close()
+
+	p := New(srv.URL)
+	p.Chat(context.Background(), provider.ChatRequest{
+		Model:    "qwen3:8b",
+		Messages: []provider.Message{{Role: "user", Content: "Hi"}},
+		NumCtx:   8192,
+	})
+
+	opts, ok := receivedBody["options"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected options field in request body")
+	}
+	numCtx, ok := opts["num_ctx"].(float64)
+	if !ok || int(numCtx) != 8192 {
+		t.Errorf("options.num_ctx = %v, want 8192", opts["num_ctx"])
+	}
+}
+
+func TestChat_NumCtxOmittedWhenZero(t *testing.T) {
+	var receivedBody map[string]interface{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewDecoder(r.Body).Decode(&receivedBody)
+		json.NewEncoder(w).Encode(ollamaChatResponse{
+			Model:   "qwen3:8b",
+			Message: provider.Message{Role: "assistant", Content: "ok"},
+			Done:    true,
+		})
+	}))
+	defer srv.Close()
+
+	p := New(srv.URL)
+	p.Chat(context.Background(), provider.ChatRequest{
+		Model:    "qwen3:8b",
+		Messages: []provider.Message{{Role: "user", Content: "Hi"}},
+	})
+
+	if _, ok := receivedBody["options"]; ok {
+		t.Error("options should be omitted when NumCtx is 0")
+	}
+}
+
 func TestStreamChat_TokenByToken(t *testing.T) {
 	tokens := []string{"Hello", " ", "world", "!"}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

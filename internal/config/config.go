@@ -14,6 +14,8 @@ type Config struct {
 	Session     SessionConfig     `yaml:"session"`
 	Memory      MemoryConfig      `yaml:"memory"`
 	TUI         TUIConfig         `yaml:"tui"`
+	Language    string            `yaml:"language"`
+	Heartbeat   HeartbeatConfig   `yaml:"heartbeat"`
 }
 
 // ProviderConfig holds provider settings.
@@ -24,7 +26,8 @@ type ProviderConfig struct {
 
 // OllamaConfig holds Ollama-specific settings.
 type OllamaConfig struct {
-	BaseURL string `yaml:"base_url"`
+	BaseURL   string `yaml:"base_url"`
+	MaxNumCtx int    `yaml:"max_num_ctx"`
 }
 
 // ModelConfig holds model settings.
@@ -53,17 +56,24 @@ type TUIConfig struct {
 	Theme string `yaml:"theme"`
 }
 
+// HeartbeatConfig holds heartbeat settings.
+type HeartbeatConfig struct {
+	Enabled  bool   `yaml:"enabled"`
+	Interval string `yaml:"interval"` // e.g., "1h", "30m", "24h"
+}
+
 // Defaults returns a Config with sensible defaults.
 func Defaults() Config {
 	return Config{
 		Provider: ProviderConfig{
 			Default: "ollama",
 			Ollama: OllamaConfig{
-				BaseURL: "http://127.0.0.1:11434",
+				BaseURL:   "http://127.0.0.1:11434",
+				MaxNumCtx: 32768,
 			},
 		},
 		Model: ModelConfig{
-			Default: "qwen3-next",
+			Default: "qwen3:8b",
 		},
 		Personality: PersonalityConfig{
 			Dir: "personality",
@@ -77,6 +87,11 @@ func Defaults() Config {
 		},
 		TUI: TUIConfig{
 			Theme: "auto",
+		},
+		Language: DetectLanguage(),
+		Heartbeat: HeartbeatConfig{
+			Enabled:  false,
+			Interval: "4h",
 		},
 	}
 }

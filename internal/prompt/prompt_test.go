@@ -179,6 +179,51 @@ func TestBootstrapDeletion_AfterFirstConversation(t *testing.T) {
 	}
 }
 
+func TestBuildSystemPromptWithLanguage(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, SectionIdentity), []byte("# Identity\nI am test"), 0o644)
+
+	a := NewAssembler(dir)
+	a.LoadFiles()
+
+	prompt := a.BuildSystemPromptWithLanguage("Deutsch")
+	if !strings.Contains(prompt, "Always respond in Deutsch") {
+		t.Error("prompt should contain language instruction for Deutsch")
+	}
+	if !strings.Contains(prompt, "I am test") {
+		t.Error("prompt should still contain personality sections")
+	}
+}
+
+func TestBuildSystemPromptWithLanguage_EmptyFallback(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, SectionIdentity), []byte("# Identity\nI am test"), 0o644)
+
+	a := NewAssembler(dir)
+	a.LoadFiles()
+
+	prompt := a.BuildSystemPromptWithLanguage("")
+	if !strings.Contains(prompt, "Always respond in English") {
+		t.Error("empty language should fall back to English")
+	}
+}
+
+func TestHeartbeatSection_Loaded(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, SectionHeartbeat), []byte("# Heartbeat\nCheck in periodically"), 0o644)
+
+	a := NewAssembler(dir)
+	a.LoadFiles()
+
+	if !a.HasSection(SectionHeartbeat) {
+		t.Error("HEARTBEAT.md should be loaded")
+	}
+	prompt := a.BuildSystemPrompt()
+	if !strings.Contains(prompt, "Check in periodically") {
+		t.Error("system prompt should contain heartbeat content")
+	}
+}
+
 func TestEmbeddedDefaults_NotEmpty(t *testing.T) {
 	for _, name := range AllSections {
 		content, err := EmbeddedDefault(name)

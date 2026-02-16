@@ -34,7 +34,7 @@ func TestSetup_CreatesConfigDir(t *testing.T) {
 	defer srv.Close()
 
 	r := &Runner{
-		Stdin:   strings.NewReader("Stefan\n"),
+		Stdin:   strings.NewReader("\n"),
 		Stdout:  &bytes.Buffer{},
 		BaseURL: srv.URL,
 	}
@@ -63,7 +63,7 @@ func TestSetup_CopiesPersonalityFiles(t *testing.T) {
 	defer srv.Close()
 
 	r := &Runner{
-		Stdin:   strings.NewReader("Test\n"),
+		Stdin:   strings.NewReader("\n"),
 		Stdout:  &bytes.Buffer{},
 		BaseURL: srv.URL,
 	}
@@ -81,10 +81,10 @@ func TestSetup_CopiesPersonalityFiles(t *testing.T) {
 		}
 	}
 
-	// Check USER.md has the name
+	// Check USER.md has language
 	data, _ := os.ReadFile(filepath.Join(tmp, "personality", "USER.md"))
-	if !strings.Contains(string(data), "Test") {
-		t.Error("USER.md should contain user's name")
+	if !strings.Contains(string(data), "Language:") {
+		t.Error("USER.md should contain language")
 	}
 }
 
@@ -96,7 +96,7 @@ func TestSetup_DetectsOllama(t *testing.T) {
 
 	out := &bytes.Buffer{}
 	r := &Runner{
-		Stdin:   strings.NewReader("User\n"),
+		Stdin:   strings.NewReader("\n"),
 		Stdout:  out,
 		BaseURL: srv.URL,
 	}
@@ -151,6 +151,66 @@ func TestSetup_NoModels(t *testing.T) {
 
 	if !strings.Contains(out.String(), "ollama pull") {
 		t.Error("output should suggest pulling a model")
+	}
+}
+
+func TestSetup_LanguageDetectedAndStored(t *testing.T) {
+	tmp := setupTestEnv(t)
+	t.Setenv("LANG", "de_DE.UTF-8")
+	t.Setenv("LC_ALL", "")
+	t.Setenv("LANGUAGE", "")
+
+	srv := newMockOllama(t, []string{"qwen3-next"})
+	defer srv.Close()
+
+	out := &bytes.Buffer{}
+	r := &Runner{
+		Stdin:   strings.NewReader("\n"), // empty line = accept detected language
+		Stdout:  out,
+		BaseURL: srv.URL,
+	}
+
+	result, err := r.Run()
+	if err != nil {
+		t.Fatalf("Run() error: %v", err)
+	}
+
+	// Config should have detected language
+	if result.Config.Language != "Deutsch" {
+		t.Errorf("config.Language = %q, want Deutsch", result.Config.Language)
+	}
+
+	// USER.md should contain language
+	data, _ := os.ReadFile(filepath.Join(tmp, "personality", "USER.md"))
+	if !strings.Contains(string(data), "Language: Deutsch") {
+		t.Errorf("USER.md should contain 'Language: Deutsch', got:\n%s", string(data))
+	}
+}
+
+func TestSetup_LanguageCustom(t *testing.T) {
+	tmp := setupTestEnv(t)
+
+	srv := newMockOllama(t, []string{"qwen3-next"})
+	defer srv.Close()
+
+	r := &Runner{
+		Stdin:   strings.NewReader("Français\n"),
+		Stdout:  &bytes.Buffer{},
+		BaseURL: srv.URL,
+	}
+
+	result, err := r.Run()
+	if err != nil {
+		t.Fatalf("Run() error: %v", err)
+	}
+
+	if result.Config.Language != "Français" {
+		t.Errorf("config.Language = %q, want Français", result.Config.Language)
+	}
+
+	data, _ := os.ReadFile(filepath.Join(tmp, "personality", "USER.md"))
+	if !strings.Contains(string(data), "Language: Français") {
+		t.Errorf("USER.md should contain 'Language: Français', got:\n%s", string(data))
 	}
 }
 

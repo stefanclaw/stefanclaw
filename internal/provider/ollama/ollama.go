@@ -35,6 +35,12 @@ type ollamaChatRequest struct {
 	Model    string             `json:"model"`
 	Messages []provider.Message `json:"messages"`
 	Stream   bool               `json:"stream"`
+	Options  *ollamaOptions     `json:"options,omitempty"`
+}
+
+// ollamaOptions holds Ollama-specific request options.
+type ollamaOptions struct {
+	NumCtx int `json:"num_ctx,omitempty"`
 }
 
 // ollamaChatResponse is a single response/chunk from Ollama's /api/chat.
@@ -63,6 +69,9 @@ func (o *OllamaProvider) Chat(ctx context.Context, req provider.ChatRequest) (*p
 		Model:    req.Model,
 		Messages: req.Messages,
 		Stream:   false,
+	}
+	if req.NumCtx > 0 {
+		body.Options = &ollamaOptions{NumCtx: req.NumCtx}
 	}
 
 	data, err := json.Marshal(body)
@@ -109,6 +118,9 @@ func (o *OllamaProvider) StreamChat(ctx context.Context, req provider.ChatReques
 		Model:    req.Model,
 		Messages: req.Messages,
 		Stream:   true,
+	}
+	if req.NumCtx > 0 {
+		body.Options = &ollamaOptions{NumCtx: req.NumCtx}
 	}
 
 	data, err := json.Marshal(body)

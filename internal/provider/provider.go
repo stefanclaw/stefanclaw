@@ -21,6 +21,7 @@ type Message struct {
 type ChatRequest struct {
 	Model    string    `json:"model"`
 	Messages []Message `json:"messages"`
+	NumCtx   int       `json:"-"` // Ollama-specific context size, not serialized generically
 }
 
 // ChatResponse is the output of a non-streaming chat completion.

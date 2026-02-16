@@ -14,6 +14,7 @@ const (
 	SectionUser      = "USER.md"
 	SectionMemory    = "MEMORY.md"
 	SectionBoot      = "BOOT.md"
+	SectionHeartbeat = "HEARTBEAT.md"
 	SectionBootstrap = "BOOTSTRAP.md"
 )
 
@@ -24,6 +25,7 @@ var AllSections = []string{
 	SectionUser,
 	SectionMemory,
 	SectionBoot,
+	SectionHeartbeat,
 	SectionBootstrap,
 }
 
@@ -82,6 +84,17 @@ func (a *Assembler) BuildSystemPrompt() string {
 	return strings.Join(parts, "\n\n---\n\n")
 }
 
+// BuildSystemPromptWithLanguage assembles the system prompt and prepends a
+// language instruction so the LLM responds in the user's preferred language.
+func (a *Assembler) BuildSystemPromptWithLanguage(language string) string {
+	base := a.BuildSystemPrompt()
+	if language == "" {
+		language = "English"
+	}
+	instruction := fmt.Sprintf("IMPORTANT: Always respond in %s. All your messages, questions, and responses must be in %s.", language, language)
+	return instruction + "\n\n---\n\n" + base
+}
+
 // HasSection returns true if the named section was loaded and is non-empty.
 func (a *Assembler) HasSection(name string) bool {
 	content, ok := a.sections[name]
@@ -95,7 +108,7 @@ func (a *Assembler) Section(name string) string {
 
 // HasBootstrap returns true if BOOTSTRAP.md exists on disk (first-run ritual pending).
 func (a *Assembler) HasBootstrap() bool {
-	return a.HasSection(SectionBootstrap)
+	return BootstrapExists(a.personalityDir)
 }
 
 // DeleteBootstrap removes BOOTSTRAP.md from disk (after first conversation).

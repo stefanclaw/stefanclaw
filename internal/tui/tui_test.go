@@ -80,14 +80,12 @@ func TestSendMessage(t *testing.T) {
 	model := newM.(*Model)
 
 	// Should have user message
-	if len(model.messages) != 1 {
-		t.Fatalf("got %d messages, want 1", len(model.messages))
+	last := model.messages[len(model.messages)-1]
+	if last.role != "user" {
+		t.Errorf("last message role = %q, want user", last.role)
 	}
-	if model.messages[0].role != "user" {
-		t.Errorf("message role = %q, want user", model.messages[0].role)
-	}
-	if model.messages[0].content != "Hi there" {
-		t.Errorf("message content = %q, want Hi there", model.messages[0].content)
+	if last.content != "Hi there" {
+		t.Errorf("last message content = %q, want Hi there", last.content)
 	}
 	if !model.streaming {
 		t.Error("should be streaming after submit")
@@ -128,11 +126,10 @@ func TestStreamingResponse(t *testing.T) {
 	if model.streaming {
 		t.Error("should not be streaming after done")
 	}
-	if len(model.messages) != 1 {
-		t.Fatalf("got %d messages, want 1", len(model.messages))
-	}
-	if model.messages[0].content != "Hello world" {
-		t.Errorf("message content = %q, want Hello world", model.messages[0].content)
+	// Last message should be the assistant response (welcome message is first)
+	last := model.messages[len(model.messages)-1]
+	if last.content != "Hello world" {
+		t.Errorf("last message content = %q, want Hello world", last.content)
 	}
 }
 
@@ -213,10 +210,9 @@ func TestUnknownCommand(t *testing.T) {
 	newM, _ := m.handleSubmit()
 	model := newM.(*Model)
 
-	if len(model.messages) != 1 {
-		t.Fatalf("got %d messages, want 1", len(model.messages))
-	}
-	if model.messages[0].role != "system" {
+	// Last message should be the unknown command error (welcome is first)
+	last := model.messages[len(model.messages)-1]
+	if last.role != "system" {
 		t.Error("unknown command should produce system message")
 	}
 }
@@ -257,10 +253,9 @@ func TestHelpCommand(t *testing.T) {
 	newM, _ := m.handleSubmit()
 	model := newM.(*Model)
 
-	if len(model.messages) != 1 {
-		t.Fatalf("got %d messages, want 1", len(model.messages))
-	}
-	if model.messages[0].role != "system" {
+	// Last message should be help text (welcome is first)
+	last := model.messages[len(model.messages)-1]
+	if last.role != "system" {
 		t.Error("help should produce system message")
 	}
 }

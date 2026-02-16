@@ -74,7 +74,7 @@ func run() error {
 	personalityDir := config.PersonalityDir()
 	asm := prompt.NewAssembler(personalityDir)
 	asm.LoadFiles()
-	systemPrompt := asm.BuildSystemPrompt()
+	systemPrompt := asm.BuildSystemPromptWithLanguage(cfg.Language)
 
 	// Initialize session store
 	sessStore := session.NewFileStore(config.SessionsDir())
@@ -105,6 +105,9 @@ func run() error {
 		Model:          cfg.Model.Default,
 		Session:        sess,
 		PersonalityDir: personalityDir,
+		Language:       cfg.Language,
+		Heartbeat:      cfg.Heartbeat,
+		MaxNumCtx:      cfg.Provider.Ollama.MaxNumCtx,
 	})
 
 	p := tea.NewProgram(tuiModel, tea.WithAltScreen())
@@ -154,7 +157,7 @@ Usage:
 
 Slash commands (in TUI):
   /help                Show available commands
-  /quit                Exit stefanclaw
+  /quit, /bye, /exit   Exit stefanclaw
   /models              List available Ollama models
   /model <name>        Switch model
   /session new         Start a new session
@@ -163,6 +166,8 @@ Slash commands (in TUI):
   /memory              Show memory entries
   /remember <fact>     Save a fact to memory
   /forget <keyword>    Remove matching memory entries
+  /language [<name>]   Show or change response language
+  /heartbeat [on|off|<interval>]  Manage heartbeat check-ins
   /personality edit    Open personality files for editing
 
 Configuration:

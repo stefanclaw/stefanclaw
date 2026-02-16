@@ -29,7 +29,7 @@ func ParseCommand(input string) *Command {
 func HelpText() string {
 	return `Available commands:
   /help                Show this help message
-  /quit                Exit stefanclaw
+  /quit, /bye, /exit   Exit stefanclaw
   /models              List available models
   /model <name>        Switch to a different model
   /session new         Start a new session
@@ -38,5 +38,8 @@ func HelpText() string {
   /memory              Show current memory entries
   /remember <fact>     Add a fact to memory
   /forget <keyword>    Remove matching memory entries
+  /language [<name>]   Show or change response language
+  /heartbeat [on|off|<interval>]  Manage heartbeat check-ins
+  /fetch <url>         Fetch a web page and display as markdown
   /personality edit    Open personality files in $EDITOR`
 }

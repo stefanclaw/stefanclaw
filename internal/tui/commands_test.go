@@ -49,10 +49,101 @@ func TestParseSlashCommand_NotACommand(t *testing.T) {
 
 func TestHelpText(t *testing.T) {
 	help := HelpText()
-	commands := []string{"/help", "/quit", "/models", "/model", "/session", "/clear", "/memory", "/remember", "/forget", "/personality"}
+	commands := []string{"/help", "/quit", "/bye", "/exit", "/models", "/model", "/session", "/clear", "/memory", "/remember", "/forget", "/language", "/heartbeat", "/fetch", "/personality"}
 	for _, cmd := range commands {
 		if !contains(help, cmd) {
 			t.Errorf("help text missing command: %s", cmd)
+		}
+	}
+}
+
+func TestParseExitAliases(t *testing.T) {
+	for _, input := range []string{"/quit", "/bye", "/exit", "/q"} {
+		cmd := ParseCommand(input)
+		if cmd == nil {
+			t.Errorf("ParseCommand(%q) = nil, want command", input)
+			continue
+		}
+		// All should parse as valid commands that the TUI handles as exit
+		switch cmd.Name {
+		case "quit", "q", "bye", "exit":
+			// ok
+		default:
+			t.Errorf("ParseCommand(%q).Name = %q, want quit/q/bye/exit", input, cmd.Name)
+		}
+	}
+}
+
+func TestParseLanguageCommand(t *testing.T) {
+	tests := []struct {
+		input    string
+		wantName string
+		wantArgs string
+	}{
+		{"/language", "language", ""},
+		{"/language Deutsch", "language", "Deutsch"},
+		{"/language English", "language", "English"},
+	}
+	for _, tt := range tests {
+		cmd := ParseCommand(tt.input)
+		if cmd == nil {
+			t.Errorf("ParseCommand(%q) = nil", tt.input)
+			continue
+		}
+		if cmd.Name != tt.wantName {
+			t.Errorf("ParseCommand(%q).Name = %q, want %q", tt.input, cmd.Name, tt.wantName)
+		}
+		if cmd.Args != tt.wantArgs {
+			t.Errorf("ParseCommand(%q).Args = %q, want %q", tt.input, cmd.Args, tt.wantArgs)
+		}
+	}
+}
+
+func TestParseFetchCommand(t *testing.T) {
+	tests := []struct {
+		input    string
+		wantArgs string
+	}{
+		{"/fetch https://example.com", "https://example.com"},
+		{"/fetch http://example.com/page", "http://example.com/page"},
+		{"/fetch", ""},
+	}
+	for _, tt := range tests {
+		cmd := ParseCommand(tt.input)
+		if cmd == nil {
+			t.Errorf("ParseCommand(%q) = nil", tt.input)
+			continue
+		}
+		if cmd.Name != "fetch" {
+			t.Errorf("ParseCommand(%q).Name = %q, want fetch", tt.input, cmd.Name)
+		}
+		if cmd.Args != tt.wantArgs {
+			t.Errorf("ParseCommand(%q).Args = %q, want %q", tt.input, cmd.Args, tt.wantArgs)
+		}
+	}
+}
+
+func TestParseHeartbeatCommand(t *testing.T) {
+	tests := []struct {
+		input    string
+		wantArgs string
+	}{
+		{"/heartbeat", ""},
+		{"/heartbeat on", "on"},
+		{"/heartbeat off", "off"},
+		{"/heartbeat 2h", "2h"},
+	}
+	for _, tt := range tests {
+		cmd := ParseCommand(tt.input)
+		if cmd == nil {
+			t.Errorf("ParseCommand(%q) = nil", tt.input)
+			continue
+		}
+		if cmd.Name != "heartbeat" {
+			t.Errorf("ParseCommand(%q).Name = %q, want heartbeat", tt.input, cmd.Name)
+		}
+		if cmd.Args != tt.wantArgs {
+			t.Errorf("ParseCommand(%q).Args = %q, want %q", tt.input, cmd.Args, tt.wantArgs)
 		}
 	}
 }

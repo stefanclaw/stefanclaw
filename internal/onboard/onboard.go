@@ -110,33 +110,35 @@ func (r *Runner) Run() (*Result, error) {
 	}
 	fmt.Fprintln(w, "done.")
 
-	// Step 5: Ask user's name
+	// Step 5: Ask preferred language
 	fmt.Fprintln(w, "")
-	fmt.Fprint(w, "  What's your name? ")
+	detectedLang := config.DetectLanguage()
+	fmt.Fprintf(w, "  What language should I use? [%s] ", detectedLang)
 	scanner := bufio.NewScanner(r.Stdin)
-	var userName string
+	var language string
 	if scanner.Scan() {
-		userName = strings.TrimSpace(scanner.Text())
+		language = strings.TrimSpace(scanner.Text())
 	}
-	if userName == "" {
-		userName = "friend"
+	if language == "" {
+		language = detectedLang
 	}
 
 	// Update USER.md
-	userContent := fmt.Sprintf("# User\n\n- Name: %s\n", userName)
+	userContent := fmt.Sprintf("# User\n\n- Language: %s\n", language)
 	os.WriteFile(config.PersonalityDir()+"/USER.md", []byte(userContent), 0o644)
 
-	// Step 6: Save config
+	// Step 7: Save config
 	cfg := config.Defaults()
 	cfg.Provider.Ollama.BaseURL = r.BaseURL
 	cfg.Model.Default = selectedModel
+	cfg.Language = language
 
 	if err := config.Save(cfg); err != nil {
 		return nil, fmt.Errorf("saving config: %w", err)
 	}
 
 	fmt.Fprintln(w, "")
-	fmt.Fprintf(w, "  Setup complete! Hello, %s.\n", userName)
+	fmt.Fprintln(w, "  Setup complete!")
 	fmt.Fprintln(w, "  Starting stefanclaw...")
 
 	return &Result{
