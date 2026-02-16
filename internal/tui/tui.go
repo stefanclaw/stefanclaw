@@ -3,7 +3,6 @@ package tui
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 
@@ -595,9 +594,6 @@ func (m *Model) buildMessages(userInput string) []provider.Message {
 	return msgs
 }
 
-// urlPattern matches http and https URLs in user messages.
-var urlPattern = regexp.MustCompile(`https?://[^\s)<>]+`)
-
 func (m *Model) startStream(ctx context.Context, userInput string) tea.Cmd {
 	// Capture what we need — the closure must not rely on m fields surviving
 	model := m.options.Model
@@ -608,20 +604,8 @@ func (m *Model) startStream(ctx context.Context, userInput string) tea.Cmd {
 
 	return func() tea.Msg {
 		// Auto-fetch URLs found in the user's message
-		if urls := urlPattern.FindAllString(userInput, 3); len(urls) > 0 {
-			var fetched []string
-			for _, u := range urls {
-				content, err := fetchClient.Fetch(ctx, u)
-				if err == nil && content != "" {
-					fetched = append(fetched, fmt.Sprintf("[Web content from %s]\n%s\n[End web content]", u, content))
-				}
-			}
-			if len(fetched) > 0 {
-				// Append fetched content to the last user message
-				last := &msgs[len(msgs)-1]
-				last.Content += "\n\n" + strings.Join(fetched, "\n\n")
-			}
-		}
+		last := &msgs[len(msgs)-1]
+		last.Content = fetch.AugmentWithWebContent(ctx, fetchClient, last.Content)
 
 		ch, err := prov.StreamChat(ctx, provider.ChatRequest{
 			Model:    model,

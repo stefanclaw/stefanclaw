@@ -3,15 +3,19 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/stefanclaw/stefanclaw/internal/config"
+	"github.com/stefanclaw/stefanclaw/internal/fetch"
 	"github.com/stefanclaw/stefanclaw/internal/memory"
 	"github.com/stefanclaw/stefanclaw/internal/onboard"
 	"github.com/stefanclaw/stefanclaw/internal/prompt"
+	"github.com/stefanclaw/stefanclaw/internal/provider"
 	"github.com/stefanclaw/stefanclaw/internal/provider/ollama"
 	"github.com/stefanclaw/stefanclaw/internal/session"
 	"github.com/stefanclaw/stefanclaw/internal/tui"
@@ -21,13 +25,16 @@ import (
 var version = "dev"
 
 func main() {
-	// Parse --ollama-url flag from args
+	// Parse --ollama-url and --pipe flags from args
 	var ollamaURL string
+	var pipeMode bool
 	filteredArgs := []string{os.Args[0]}
 	for i := 1; i < len(os.Args); i++ {
 		if os.Args[i] == "--ollama-url" && i+1 < len(os.Args) {
 			ollamaURL = os.Args[i+1]
 			i++ // skip the value
+		} else if os.Args[i] == "--pipe" {
+			pipeMode = true
 		} else {
 			filteredArgs = append(filteredArgs, os.Args[i])
 		}
@@ -39,7 +46,7 @@ func main() {
 		ollamaURL = os.Getenv("OLLAMA_HOST")
 	}
 
-	if len(os.Args) > 1 {
+	if !pipeMode && len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "--version", "-v":
 			fmt.Printf("stefanclaw %s\n", version)
@@ -54,6 +61,16 @@ func main() {
 			runUpdate()
 			return
 		}
+	}
+
+	if pipeMode {
+		// Collect remaining args as the question
+		question := strings.Join(os.Args[1:], " ")
+		if err := runPipe(ollamaURL, question); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		return
 	}
 
 	if err := run(ollamaURL); err != nil {
@@ -150,6 +167,73 @@ func run(ollamaURL string) error {
 	return err
 }
 
+func runPipe(ollamaURL, question string) error {
+	// Pipe mode requires config to exist already (no onboarding)
+	if config.IsFirstRun() {
+		return fmt.Errorf("no config found — run stefanclaw interactively first to complete onboarding")
+	}
+
+	// Read question from stdin if not provided as args
+	question = strings.TrimSpace(question)
+	if question == "" {
+		data, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return fmt.Errorf("reading stdin: %w", err)
+		}
+		question = strings.TrimSpace(string(data))
+	}
+	if question == "" {
+		return fmt.Errorf("no question provided — pass it as arguments or pipe to stdin")
+	}
+
+	// Load config
+	cfg, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+	if ollamaURL != "" {
+		cfg.Provider.Ollama.BaseURL = ollamaURL
+	}
+
+	// Create Ollama provider and check availability
+	ollamaProvider := ollama.New(cfg.Provider.Ollama.BaseURL)
+	ctx := context.Background()
+	checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if err := ollamaProvider.IsAvailable(checkCtx); err != nil {
+		return fmt.Errorf("ollama is not running (start with: ollama serve): %w", err)
+	}
+
+	// Build system prompt
+	personalityDir := config.PersonalityDir()
+	asm := prompt.NewAssembler(personalityDir)
+	asm.LoadFiles()
+	systemPrompt := asm.BuildSystemPromptWithLanguage(cfg.Language)
+
+	// Auto-fetch URLs in the question
+	fetchClient := fetch.New()
+	augmented := fetch.AugmentWithWebContent(ctx, fetchClient, question)
+
+	// Build messages
+	var msgs []provider.Message
+	if systemPrompt != "" {
+		msgs = append(msgs, provider.Message{Role: "system", Content: systemPrompt})
+	}
+	msgs = append(msgs, provider.Message{Role: "user", Content: augmented})
+
+	// Call the model (non-streaming, blocking)
+	resp, err := ollamaProvider.Chat(ctx, provider.ChatRequest{
+		Model:    cfg.Model.Default,
+		Messages: msgs,
+	})
+	if err != nil {
+		return fmt.Errorf("chat: %w", err)
+	}
+
+	fmt.Println(resp.Message.Content)
+	return nil
+}
+
 func runUpdate() {
 	if version == "dev" {
 		fmt.Println("Auto-update is not available for development builds.")
@@ -204,6 +288,7 @@ func printHelp() {
 
 Usage:
   stefanclaw                          Start the TUI chat interface
+  stefanclaw --pipe "question"        Non-interactive mode (prints response to stdout)
   stefanclaw --ollama-url <url>       Use a custom Ollama endpoint
   stefanclaw --version                Print version and exit
   stefanclaw --help                   Show this help
@@ -237,8 +322,14 @@ Ollama endpoint (priority: flag > env > config > default):
 Requires:
   Ollama running locally or at the specified endpoint (https://ollama.ai)
 
+Pipe mode (non-interactive, for scripting):
+  stefanclaw --pipe "What is 2+2?"                          Question as argument
+  echo "What is 2+2?" | stefanclaw --pipe                   Question from stdin
+  stefanclaw --pipe "Summarize https://example.com" | pbcopy  Pipe into other tools
+
 Examples:
   stefanclaw                                                Start chatting
+  stefanclaw --pipe "Hello, who are you?"                   Non-interactive query
   stefanclaw --ollama-url http://192.168.1.100:11434        Use remote Ollama
   OLLAMA_HOST=http://192.168.1.100:11434 stefanclaw         Same via env var
   STEFANCLAW_CONFIG_DIR=/tmp/test stefanclaw                Use custom config dir

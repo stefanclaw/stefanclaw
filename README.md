@@ -8,6 +8,7 @@ OpenClaw has way more features and obviously a brighter future since it is fores
 > This is beta software at best and potentially dangerous to use! No warranties, no guarantees — use at your own risk.
 
 ![stefanclaw TUI screenshot](assets/screenshot.png)
+![stefanclaw TUI screenshot 2](assets/screenshot2.png)
 
 ## Installation
 
@@ -54,6 +55,26 @@ Priority: `--ollama-url` flag > `OLLAMA_HOST` env var > `config.yaml` > default 
 
 On first run, an onboarding wizard configures your setup (name, language, model).
 
+## Pipe Mode
+
+Pipe mode lets you use stefanclaw non-interactively — send a single question and get the response on stdout. Useful for scripting, CI pipelines, and debugging.
+
+```bash
+# Question as argument
+stefanclaw --pipe "What is 2+2?"
+
+# Question from stdin
+echo "Explain Go interfaces" | stefanclaw --pipe
+
+# With web fetch
+stefanclaw --pipe "Summarize https://example.com"
+
+# Pipe into other tools
+stefanclaw --pipe "Write a haiku about Go" | pbcopy
+```
+
+Requires onboarding to be completed first (run `stefanclaw` interactively once).
+
 ## Features
 
 - TUI chat interface with streaming responses and markdown rendering
@@ -68,6 +89,7 @@ On first run, an onboarding wizard configures your setup (name, language, model)
 - **Adaptive context scaling** — starts with 4K context, automatically grows to 8K/16K/32K as conversations get longer
 - **Web fetch** — fetch any web page as markdown via Jina Reader
 - **Web search** — search the web via DuckDuckGo (no API key needed)
+- **Pipe mode** — non-interactive `--pipe` flag for scripting and CI
 - **Auto-update** — checks for updates on startup, upgrade in-place with `/update` or `--update`
 - Slash commands: `/help`, `/quit`, `/bye`, `/exit`, `/models`, `/model`, `/session`, `/memory`, `/remember`, `/forget`, `/clear`, `/language`, `/heartbeat`, `/fetch`, `/search`, `/personality edit`, `/update`
 
