@@ -7,6 +7,8 @@ OpenClaw has way more features and obviously a brighter future since it is fores
 > [!WARNING]
 > This is beta software at best and potentially dangerous to use! No warranties, no guarantees — use at your own risk.
 
+![stefanclaw TUI screenshot](assets/screenshot.png)
+
 ## Installation
 
 Download the latest binary for your platform:
