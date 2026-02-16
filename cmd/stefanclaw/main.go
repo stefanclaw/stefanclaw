@@ -122,6 +122,9 @@ func run(ollamaURL string) error {
 		sessStore.SetCurrent(sess.ID)
 	}
 
+	// Load conversation history from transcript
+	history, _ := sessStore.LoadTranscript(sess.ID)
+
 	// Initialize memory store
 	memStore := memory.NewStore(config.PersonalityDir() + "/MEMORY.md")
 
@@ -139,6 +142,7 @@ func run(ollamaURL string) error {
 		Heartbeat:      cfg.Heartbeat,
 		MaxNumCtx:      cfg.Provider.Ollama.MaxNumCtx,
 		Version:        version,
+		History:        history,
 	})
 
 	p := tea.NewProgram(tuiModel, tea.WithAltScreen())

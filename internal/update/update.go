@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"runtime"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/creativeprojects/go-selfupdate"
 )
 
@@ -43,7 +44,12 @@ func Check(ctx context.Context, currentVersion string) (*Result, error) {
 	}
 	if found {
 		res.LatestVersion = latest.Version()
-		res.UpdateAvailable = latest.GreaterThan(currentVersion)
+		if _, err := semver.NewVersion(currentVersion); err != nil {
+			// Not valid semver (e.g. "dev") — any release is newer
+			res.UpdateAvailable = true
+		} else {
+			res.UpdateAvailable = latest.GreaterThan(currentVersion)
+		}
 	}
 	return res, nil
 }
@@ -74,7 +80,10 @@ func Apply(ctx context.Context, currentVersion string) (*Result, error) {
 		CurrentVersion: currentVersion,
 	}
 
-	if !found || !latest.GreaterThan(currentVersion) {
+	_, semverErr := semver.NewVersion(currentVersion)
+	isValidSemver := semverErr == nil
+
+	if !found || (isValidSemver && !latest.GreaterThan(currentVersion)) {
 		if found {
 			res.LatestVersion = latest.Version()
 		}

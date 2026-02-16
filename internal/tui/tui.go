@@ -37,6 +37,7 @@ type Options struct {
 	Heartbeat      config.HeartbeatConfig
 	MaxNumCtx      int
 	Version        string
+	History        []provider.Message
 }
 
 // ctxTiers defines the adaptive context size tiers.
@@ -176,11 +177,23 @@ func New(opts Options) Model {
 		maxCtx = 32768
 	}
 
+	// Convert history into display messages
+	var history []displayMessage
+	for _, m := range opts.History {
+		if m.Role == "user" || m.Role == "assistant" || m.Role == "summary" {
+			history = append(history, displayMessage{
+				role:    m.Role,
+				content: m.Content,
+			})
+		}
+	}
+
 	return Model{
 		options:           opts,
 		textarea:          ta,
 		viewport:          vp,
 		spinner:           sp,
+		messages:          history,
 		mdRenderer:        renderer,
 		autoGreet:         isFirstRun,
 		heartbeatEnabled:  opts.Heartbeat.Enabled,
@@ -301,6 +314,35 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 			}
+		}
+
+		// Conversation compaction: summarize old messages when context is getting full
+		providerMsgs := m.buildMessages("")
+		compactResult, compacted, compactErr := session.Compact(
+			context.Background(),
+			m.options.Provider,
+			m.options.Model,
+			providerMsgs,
+			m.currentNumCtx,
+			6, // keep 3 user + 3 assistant turns
+		)
+		if compactErr == nil && compactResult != nil {
+			// Replace in-memory display messages with compacted set
+			var newMessages []displayMessage
+			for _, cm := range compacted {
+				if cm.Role == "system" {
+					continue // skip system prompt
+				}
+				newMessages = append(newMessages, displayMessage{
+					role:    cm.Role,
+					content: cm.Content,
+				})
+			}
+			m.messages = newMessages
+			m.messages = append(m.messages, displayMessage{
+				role: "system",
+				content: fmt.Sprintf("Conversation compacted: %d messages summarized to keep context manageable.", compactResult.OriginalCount-compactResult.RemainingCount),
+			})
 		}
 
 		if m.streamContent != "" {
@@ -558,7 +600,6 @@ var urlPattern = regexp.MustCompile(`https?://[^\s)<>]+`)
 
 func (m *Model) startStream(ctx context.Context, userInput string) tea.Cmd {
 	// Capture what we need — the closure must not rely on m fields surviving
-	sysProm := m.options.SystemPrompt
 	model := m.options.Model
 	prov := m.options.Provider
 	msgs := m.buildMessages(userInput)
@@ -566,8 +607,6 @@ func (m *Model) startStream(ctx context.Context, userInput string) tea.Cmd {
 	fetchClient := m.fetchClient
 
 	return func() tea.Msg {
-		_ = sysProm // already included via buildMessages
-
 		// Auto-fetch URLs found in the user's message
 		if urls := urlPattern.FindAllString(userInput, 3); len(urls) > 0 {
 			var fetched []string

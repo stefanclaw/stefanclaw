@@ -20,6 +20,9 @@ func TestCheckDevVersion(t *testing.T) {
 	if res.CurrentVersion != "dev" {
 		t.Errorf("CurrentVersion = %q, want dev", res.CurrentVersion)
 	}
+	if !res.UpdateAvailable {
+		t.Error("expected UpdateAvailable = true for dev version")
+	}
 }
 
 func TestCheckValidVersion(t *testing.T) {

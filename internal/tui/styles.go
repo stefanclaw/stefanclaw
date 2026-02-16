@@ -6,7 +6,6 @@ var (
 	// Colors
 	primaryColor   = lipgloss.Color("#7C3AED")
 	secondaryColor = lipgloss.Color("#6B7280")
-	errorColor     = lipgloss.Color("#EF4444")
 	successColor   = lipgloss.Color("#10B981")
 
 	// Status bar
@@ -28,14 +27,7 @@ var (
 			Foreground(secondaryColor).
 			Italic(true)
 
-	errorMsgStyle = lipgloss.NewStyle().
-			Foreground(errorColor)
-
 	// Input area
 	inputPromptStyle = lipgloss.NewStyle().
 				Foreground(primaryColor)
-
-	// Help text
-	helpStyle = lipgloss.NewStyle().
-			Foreground(secondaryColor)
 )
