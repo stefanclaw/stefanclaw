@@ -149,7 +149,7 @@ func New(opts Options) Model {
 	ta.Placeholder = "Type a message... (or /help for commands)"
 	ta.Focus()
 	ta.CharLimit = 4096
-	ta.SetHeight(1)
+	ta.SetHeight(3)
 	ta.ShowLineNumbers = false
 	ta.Prompt = inputPromptStyle.Render("> ")
 
@@ -221,7 +221,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		statusH := 1
-		inputH := 3
+		inputH := 5
 		viewH := m.height - statusH - inputH
 		if viewH < 1 {
 			viewH = 1
@@ -676,7 +676,7 @@ func (m *Model) updateViewport() {
 		switch msg.role {
 		case "user":
 			label := userLabelStyle.Render("You: ")
-			lines = append(lines, label+msg.content)
+			lines = append(lines, lipgloss.NewStyle().Width(m.width).Render(label+msg.content))
 		case "assistant":
 			label := assistantLabelStyle.Render("Assistant: ")
 			rendered := m.renderMarkdown(msg.content)
@@ -696,7 +696,7 @@ func (m *Model) updateViewport() {
 	// Show streaming content (no markdown rendering during streaming for speed)
 	if m.streaming && m.streamContent != "" {
 		label := assistantLabelStyle.Render("Assistant: ")
-		lines = append(lines, label+m.streamContent+"▌")
+		lines = append(lines, lipgloss.NewStyle().Width(m.width).Render(label+m.streamContent+"▌"))
 		lines = append(lines, "")
 	}
 
