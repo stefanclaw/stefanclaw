@@ -99,7 +99,7 @@ internal/
   session/          Session store, JSONL transcripts, compaction
   memory/           Persistent memory, fact extraction, search
   onboard/          First-run wizard
-  tui/              Bubble Tea terminal UI with markdown rendering
+  tui/              Bubble Tea terminal UI, command registry, handlers
   channel/          Channel interface (future: Telegram, etc.)
 personality/        Default personality templates (embedded)
 ```
