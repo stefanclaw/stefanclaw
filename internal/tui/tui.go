@@ -660,7 +660,7 @@ func (m *Model) triggerAutoGreet() tea.Cmd {
 			})
 		}
 
-		greetMsg := "Hello! Please greet me briefly and let me know you're ready to chat."
+		greetMsg := "This is our very first conversation. Please introduce yourself and ask the getting-to-know-you questions from your Bootstrap instructions."
 		if lang != "" && lang != "English" {
 			greetMsg += " Respond in " + lang + "."
 		}
